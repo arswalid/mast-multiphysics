@@ -407,18 +407,32 @@ MAST::IsotropicMaterialProperty::
 StiffnessMatrix2D::operator() (const libMesh::Point& p,
                                const Real t,
                                RealMatrixX& m) const {
-    libmesh_assert(_plane_stress); // currently only implemented for plane stress
+    // libmesh_assert(_plane_stress); // currently only implemented for plane stress
     m = RealMatrixX::Zero(3,3);
     Real E, nu;
     _E(p, t, E); _nu(p, t, nu);
-    for (unsigned int i=0; i<2; i++) {
-        for (unsigned int j=0; j<2; j++)
-            if (i == j) // diagonal: direct stress
-                m(i,i) = E/(1.-nu*nu);
-            else // offdiagonal: direct stress
-                m(i,j) = E*nu/(1.-nu*nu);
+    if (_plane_stress)
+    {
+        for (unsigned int i=0; i<2; i++) {
+            for (unsigned int j=0; j<2; j++)
+                if (i == j) // diagonal: direct stress
+                    m(i,i) = E/(1.-nu*nu);
+                else // offdiagonal: direct stress
+                    m(i,j) = E*nu/(1.-nu*nu);
+        }
+        m(2,2) = E/2./(1.+nu); // diagonal: shear stress
     }
-    m(2,2) = E/2./(1.+nu); // diagonal: shear stress
+    else // plane_strain
+    {
+        for (unsigned int i=0; i<2; i++) {
+            for (unsigned int j=0; j<2; j++)
+                if (i == j) // diagonal: direct stress
+                    m(i,i) = E*(1.-nu)/((1.+nu)*(1.-2.*nu));
+                else // offdiagonal: direct stress
+                    m(i,j) = E*nu/((1.+nu)*(1.-2.*nu));
+        }
+        m(2,2) = E/(1.+nu); // diagonal: shear stress
+    }
 }
 
 
@@ -430,34 +444,62 @@ StiffnessMatrix2D::derivative (  const MAST::FunctionBase& f,
                                const libMesh::Point& p,
                                const Real t,
                                RealMatrixX& m) const {
-    libmesh_assert(_plane_stress); // currently only implemented for plane stress
+    // libmesh_assert(_plane_stress); // currently only implemented for plane stress
     RealMatrixX dm;
     m = RealMatrixX::Zero(3,3); dm = RealMatrixX::Zero(3, 3);
     Real E, nu, dEdf, dnudf;
     _E  (p, t, E);   _E.derivative( f, p, t, dEdf);
     _nu (p, t, nu); _nu.derivative( f, p, t, dnudf);
     
-    // parM/parE * parE/parf
-    for (unsigned int i=0; i<2; i++) {
-        for (unsigned int j=0; j<2; j++)
-            if (i == j) // diagonal: direct stress
-                dm(i,i) = 1./(1.-nu*nu);
-            else // offdiagonal: direct stress
-                dm(i,j) = 1.*nu/(1.-nu*nu);
+    if (_plane_stress)
+    {
+        // parM/parE * parE/parf
+        for (unsigned int i=0; i<2; i++) {
+            for (unsigned int j=0; j<2; j++)
+                if (i == j) // diagonal: direct stress
+                    dm(i,i) = 1./(1.-nu*nu);
+                else // offdiagonal: direct stress
+                    dm(i,j) = 1.*nu/(1.-nu*nu);
+        }
+        dm(2,2) = 1./2./(1.+nu); // diagonal: shear stress
+        m += dEdf * dm;
+        
+        // parM/parnu * parnu/parf
+        for (unsigned int i=0; i<2; i++) {
+            for (unsigned int j=0; j<2; j++)
+                if (i == j) // diagonal: direct stress
+                    dm(i,i) = E/pow(1.-nu*nu, 2)*2.*nu;
+                else // offdiagonal: direct stress
+                    dm(i,j) = E/(1.-nu*nu) + E*nu/pow(1.-nu*nu,2)*2.*nu;
+        }
+        dm(2,2) = -E/2./pow(1.+nu,2); // diagonal: shear stress
+        m+= dnudf*dm;
     }
-    dm(2,2) = 1./2./(1.+nu); // diagonal: shear stress
-    m += dEdf * dm;
-    
-    // parM/parnu * parnu/parf
-    for (unsigned int i=0; i<2; i++) {
-        for (unsigned int j=0; j<2; j++)
-            if (i == j) // diagonal: direct stress
-                dm(i,i) = E/pow(1.-nu*nu, 2)*2.*nu;
-            else // offdiagonal: direct stress
-                dm(i,j) = E/(1.-nu*nu) + E*nu/pow(1.-nu*nu,2)*2.*nu;
+    else // plane_strain
+    {
+        // parM/parE * parE/parf
+        for (unsigned int i=0; i<2; i++) {
+            for (unsigned int j=0; j<2; j++)
+                if (i == j) // diagonal: direct stress
+                    dm(i,i) = 1.*(1.-nu)/((1.+nu)*(1.-2.*nu));
+                else // offdiagonal: direct stress
+                    dm(i,j) = 1.*nu/((1.+nu)*(1.-2.*nu));
+        }
+        dm(2,2) = 1./(1.+nu); // diagonal: shear stress
+        m += dEdf*dm;
+        
+        
+        // parM/parnu * parnu/parf
+        for (unsigned int i=0; i<2; i++) {
+            for (unsigned int j=0; j<2; j++)
+                if (i == j) // diagonal: direct stress
+                    dm(i,i) = E*2.*nu*(2.-nu)/pow(2.*nu*nu+nu-1., 2);
+                else // offdiagonal: direct stress
+                    dm(i,j) = (2.*nu*nu*E+E)/pow(2*nu*nu+nu-1., 2);
+        }
+        dm(2,2) = -E/pow(1.+nu, 2); // diagonal: shear stress
+        m += dnudf*dm;
     }
-    dm(2,2) = -E/2./pow(1.+nu,2); // diagonal: shear stress
-    m+= dnudf*dm;
 }
 
 

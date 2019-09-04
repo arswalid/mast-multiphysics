@@ -483,7 +483,12 @@ MAST::OrthotropicMaterialProperty::
 StiffnessMatrix2D::operator() (const libMesh::Point& p,
                                const Real t,
                                RealMatrixX& m) const {
-    libmesh_assert(_plane_stress); // currently only implemented for plane stress
+    // https://www.efunda.com/formulae/solid_mechanics/mat_mechanics/hooke_orthotropic.cfm
+    // Applying plane strain and plane stress assumptions to the 3D matrix at
+    // the website above, results in the same matrix for both. So, I think
+    // plane stress, and plane strain, may be equivalent for orthotropic 
+    // materials.
+    // libmesh_assert(_plane_stress); // currently only implemented for plane stress
     m = RealMatrixX::Zero(3,3);
     Real E11, E22, nu12, nu21, G12, D;
     _E11  (p, t,  E11);
@@ -513,7 +518,12 @@ StiffnessMatrix2D::derivative (  const MAST::FunctionBase& f,
                                const libMesh::Point& p,
                                const Real t,
                                RealMatrixX& m) const {
-    libmesh_assert(_plane_stress); // currently only implemented for plane stress
+    // https://www.efunda.com/formulae/solid_mechanics/mat_mechanics/hooke_orthotropic.cfm
+    // Applying plane strain and plane stress assumptions to the 3D matrix at
+    // the website above, results in the same matrix for both. So, I think
+    // plane stress, and plane strain, may be equivalent for orthotropic 
+    // materials.
+    // libmesh_assert(_plane_stress); // currently only implemented for plane stress
     RealMatrixX dm;
     m = RealMatrixX::Zero(3,3); dm = RealMatrixX::Zero(3, 3);
     Real E11, E22, nu12, nu21, dE11df, dE22df, dnu12df, dnu21df, D, dDdf, dG12df;

@@ -1036,7 +1036,7 @@ stiffness_A_matrix(const MAST::ElementBase& e) const {
     
     MAST::FieldFunction<RealMatrixX>* rval =
     new MAST::Solid2DSectionProperty::ExtensionStiffnessMatrix
-    (_material->stiffness_matrix(2),
+    (_material->stiffness_matrix(2, _if_plane_stress),
      this->get<const FieldFunction<Real> >("h"));
     
     return std::unique_ptr<MAST::FieldFunction<RealMatrixX> > (rval);
@@ -1049,7 +1049,7 @@ stiffness_B_matrix(const MAST::ElementBase& e) const {
     
     MAST::FieldFunction<RealMatrixX>* rval =
     new MAST::Solid2DSectionProperty::ExtensionBendingStiffnessMatrix
-    (_material->stiffness_matrix(2),
+    (_material->stiffness_matrix(2, _if_plane_stress),
      this->get<FieldFunction<Real> >("h"),
      this->get<FieldFunction<Real> >("off"));
     
@@ -1064,7 +1064,7 @@ stiffness_D_matrix(const MAST::ElementBase& e) const {
     
     MAST::FieldFunction<RealMatrixX>* rval =
     new MAST::Solid2DSectionProperty::BendingStiffnessMatrix
-    (_material->stiffness_matrix(2),
+    (_material->stiffness_matrix(2, _if_plane_stress),
      this->get<FieldFunction<Real> >("h"),
      this->get<FieldFunction<Real> >("off"));
     
@@ -1105,7 +1105,7 @@ thermal_expansion_A_matrix(const MAST::ElementBase& e) const {
     
     MAST::FieldFunction<RealMatrixX>* rval =
     new MAST::Solid2DSectionProperty::ThermalExpansionAMatrix
-    (_material->stiffness_matrix(2),
+    (_material->stiffness_matrix(2, _if_plane_stress),
      _material->thermal_expansion_matrix(2),
      this->get<FieldFunction<Real> >("h"));
     
@@ -1121,7 +1121,7 @@ thermal_expansion_B_matrix(const MAST::ElementBase& e) const {
     
     MAST::FieldFunction<RealMatrixX>* rval =
     new MAST::Solid2DSectionProperty::ThermalExpansionBMatrix
-    (_material->stiffness_matrix(2),
+    (_material->stiffness_matrix(2, _if_plane_stress),
      _material->thermal_expansion_matrix(2),
      this->get<FieldFunction<Real> >("h"),
      this->get<FieldFunction<Real> >("off"));
