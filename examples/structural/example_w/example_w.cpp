@@ -1755,6 +1755,18 @@ public:  // parametric constructor
                         nconv = std::min(_sys->get_n_converged_eigenvalues(),
                                          _sys->get_n_requested_eigenvalues());
 
+                                libMesh::out << "** computation of sensitivity of T_omega_0**" << std::endl;
+                                // calculate dXdT
+                                libMesh::NumericVector <Real> &dXdT = _sys->add_sensitivity_solution(2);
+                                dXdT.zero();
+
+                                // sensitivity analysis
+                                _sys->sensitivity_solve(*_nonlinear_elem_ops,
+                                                        *_nonlinear_assembly,
+                                                        *_temp,
+                                                        true);
+
+                dXdT = _sys->get_sensitivity_solution(2);
 
 
                 for (unsigned int i = 0; i < _n_vars; i++) {
@@ -1789,19 +1801,18 @@ public:  // parametric constructor
                     // for this term we dont need a base solution therefore we zero out the dxdp
 
                     std::vector<Real> eig_sens_omega0_T(nconv);
-                    dXdp_omega0.zero();
-                    _modal_assembly->set_base_solution(dXdp_omega0, true);
+
+                    _modal_assembly->set_base_solution(dXdT, true);
                     _sys->eigenproblem_sensitivity_solve(*_modal_elem_ops,
                                                          *_modal_assembly,
                                                          *_temp,
                                                          eig_sens_omega0_T);
+                    _modal_assembly->clear_base_solution(true);
 
                     // \frac{d T }{d x_i} = -  (eig_sens_omega0_T)^-1 * eig_sens_omega0
                     grads[(i * _n_ineq) + (_mesh->n_elem() + _n_eig + 1)] =
                             (-_dv_scaling[i]/ (*_temp)() ) * (-eig_sens_omega0[0] / eig_sens_omega0_T[0]) ;
 
-
-                    _modal_assembly->clear_base_solution(true);
                 }
                 _modal_assembly->clear_base_solution();
                 _modal_assembly->clear_discipline_and_system();
@@ -2244,8 +2255,9 @@ public:  // parametric constructor
 
 
                         // if eigenvalue less than omega_0 is found interpolate to find temperature at omega = omega_0
-                        auto min_eig = std::min_element(&eig_vec[0],&eig_vec[nconv]);
-                        if ((*min_eig < _obj._omega_0) && (!if_negative_found)){
+                        //auto min_eig = std::min_element(&eig_vec[0],&eig_vec[nconv]);
+                        double min_eig = eig_vec[0];
+                        if ((min_eig < _obj._omega_0) && (!if_negative_found)){
                             libMesh::out << " eigenvalue less than omega_0 found " << std::endl;
                             if_negative_found = true;
 
