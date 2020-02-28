@@ -222,7 +222,7 @@ protected:      // protected member variables
             _thy_station_parameters_stiff,
             _thz_station_parameters_stiff; // N_stiff*N_stations params
     std::vector<MAST::Parameter*>                _problem_parameters;
-    std::auto_ptr<MAST::MultilinearInterpolation>   _th_plate_f;
+    MAST::MultilinearInterpolation* _th_plate_f;
     // number of velocity divisions from V=0 to V=2*V0_flutter
     unsigned int _n_V_divs_flutter;
     std::vector<MAST::StressStrainOutputBase *> output_vec;
@@ -406,17 +406,19 @@ public:  // parametric constructor
 
         _init_dv_vector();
 
-        _init_thickness_variables();
-
         _init_loads();
 
         _init_material(); // create the property functions for the plate
 
+        _init_thickness_variables_plate();
+
+        _init_thickness_variables_stiff();
+
         _init_section_property_plate(); // create the material property card
 
-        _init_piston_vals();
+        _init_section_property_stiff();
 
-        _init_section_property_stiffener(); // now add the property cards for each stiffener element orientation
+        _init_piston_vals();
 
         _init_nullspace(); // initialize the null space object and assign it to the structural module
 
@@ -633,7 +635,6 @@ public:  // parametric constructor
 
     }
 
-
     void _init_system_and_discipline() {
         //
         // make sure that the mesh has been initialized
@@ -757,32 +758,9 @@ public:  // parametric constructor
             _dv_init[i] = _input("dv_init", "", th_stiff / th_u, i);
         }
 
-//        _dv_init     [          0 ] =    0.000756353417639/ th_u;
-//        _dv_init     [          1 ] =    0.001289105172330/ th_u;
-//        _dv_init     [          2 ] =    0.000758136764126/ th_u;
-//        _dv_init     [          3 ] =    0.004738767647553/ th_u;
-//        _dv_init     [          4 ] =    0.004366339759017/ th_u;
-//        _dv_init     [          5 ] =    0.004744810158320/ th_u;
-//        _dv_init     [          6 ] =    0.004492514256054/ th_u;
-//        _dv_init     [          7 ] =    0.004059037082863/ th_u;
-//        _dv_init     [          8 ] =    0.004498139875795/ th_u;
-//        _dv_init     [          9 ] =    0.004716538972727/ th_u;
-//        _dv_init     [         10 ] =    0.004286691718592/ th_u;
-//        _dv_init     [         11 ] =    0.004616035180759/ th_u;
-//        _dv_init     [         12 ] =    0.004543729599818/ th_u;
-//        _dv_init     [         13 ] =    0.004123091251211/ th_u;
-//        _dv_init     [         14 ] =    0.004488817534016/ th_u;
-//        _dv_init     [         15 ] =    0.004809972841285/ th_u;
-//        _dv_init     [         16 ] =    0.004365452325321/ th_u;
-//        _dv_init     [         17 ] =    0.004807931915246/ th_u;
-//        _dv_init     [         18 ] =    0.004526012717207/ th_u;
-//        _dv_init     [         19 ] =    0.004056541442243/ th_u;
-//        _dv_init     [         20 ] =    0.004527049343407/ th_u;
-
-
     }
 
-    void _init_thickness_variables(){
+    void _init_thickness_variables_plate(){
 
         // create the thickness variables
         _th_station_parameters_plate.resize(_n_dv_stations_x);
@@ -817,7 +795,7 @@ public:  // parametric constructor
         }
 
         // now create the h_y function and give it to the property card
-        _th_plate_f.reset(new MAST::MultilinearInterpolation("h", _thy_station_vals));
+        _th_plate_f = new MAST::MultilinearInterpolation("h", _thy_station_vals);
         _thy_station_vals.clear();
 
     }
@@ -867,8 +845,6 @@ public:  // parametric constructor
 
     void _init_section_property_plate(){
 
-
-        _thzoff_stiff_f = new MAST::ConstantFieldFunction("hz_off", *_zero);
         _hoff_plate_f   = new MAST::SectionOffset("off",
                                                   *_th_plate_f,
                                                   0.);
@@ -889,13 +865,7 @@ public:  // parametric constructor
 
     }
 
-    void _init_section_property_stiffener() {
-
-        RealVectorX orientation = RealVectorX::Zero(3);
-        orientation(1) = 1.;
-
-        // property card per stiffener
-        _p_card_stiff.resize(_n_stiff);
+    void _init_thickness_variables_stiff() {
 
         // thickness per stiffener station
         _thy_station_parameters_stiff.resize(_n_dv_stations_x * _n_stiff);
@@ -923,8 +893,8 @@ public:  // parametric constructor
                 // specified station and a constant function that defines the
                 // field function at that location.
                 MAST::Parameter
-                        *h_y = new MAST::Parameter(ossy.str(), _input("thickness", "", 0.002)),
-                        *h_z = new MAST::Parameter(ossz.str(), _input("thickness", "", 0.002));
+                        *h_y = new MAST::Parameter(ossy.str(), _input("thickness_stiff", "", 0.002)),
+                        *h_z = new MAST::Parameter(ossz.str(), _input("thickness_stiff", "", 0.002));
 
                 MAST::ConstantFieldFunction
                         *h_y_f = new MAST::ConstantFieldFunction(ossy.str(), *h_y),
@@ -949,38 +919,49 @@ public:  // parametric constructor
                 _problem_parameters[(2 * i + 1) * _n_dv_stations_x + j] = h_y;
                 _problem_parameters[(2 * i + 2) * _n_dv_stations_x + j] = h_z;
             }
-
-            // now create the h_y function and give it to the property card
-            _thy_stiff_f[i] = new MAST::MultilinearInterpolation("hy", _thy_station_vals);
-            _thz_stiff_f[i] = new MAST::MultilinearInterpolation("hz", _thz_station_vals);
-            _hyoff_stiff_f[i] = new MAST::SectionOffset("hy_off",
-                                                        *_thy_stiff_f[i],
-                                                        -1.);
-
-            _p_card_stiff[i] = new MAST::Solid1DSectionElementPropertyCard;
-
-
-            // add the section properties to the card
-            _p_card_stiff[i]->add(*_thy_stiff_f[i]);
-            _p_card_stiff[i]->add(*_thz_stiff_f[i]);
-            _p_card_stiff[i]->add(*_hyoff_stiff_f[i]);
-            _p_card_stiff[i]->add(*_thzoff_stiff_f);
-            _p_card_stiff[i]->y_vector() = orientation;
-
-            // tell the section property about the material property
-            _p_card_stiff[i]->set_material(*_m_card);
-
-            //_p_card_stiff[i]->set_bending_model(MAST::TIMOSHENKO);
-            //_p_card_stiff[i]->set_bending_model(MAST::BERNOULLI);
-
-            if (_if_vk) _p_card_stiff[i]->set_strain(MAST::NONLINEAR_STRAIN);
-
-            _p_card_stiff[i]->init();
-
-            // the domain ID of the stiffener is 1 plus the stiff number
-            _discipline->set_property_for_subdomain(i + 1, *_p_card_stiff[i]);
         }
+    }
 
+    void _init_section_property_stiff() {
+
+            _thzoff_stiff_f = new MAST::ConstantFieldFunction("hz_off", *_zero);
+            RealVectorX orientation = RealVectorX::Zero(3);
+            orientation(1) = 1.;
+
+            // property card per stiffener
+            _p_card_stiff.resize(_n_stiff);
+
+            for (unsigned int i = 0; i < _n_stiff; i++) {
+                // now create the h_y function and give it to the property card
+                _thy_stiff_f[i] = new MAST::MultilinearInterpolation("hy", _thy_station_vals);
+                _thz_stiff_f[i] = new MAST::MultilinearInterpolation("hz", _thz_station_vals);
+                _hyoff_stiff_f[i] = new MAST::SectionOffset("hy_off",
+                                                            *_thy_stiff_f[i],
+                                                            -1.);
+
+                _p_card_stiff[i] = new MAST::Solid1DSectionElementPropertyCard;
+
+
+                // add the section properties to the card
+                _p_card_stiff[i]->add(*_thy_stiff_f[i]);
+                _p_card_stiff[i]->add(*_thz_stiff_f[i]);
+                _p_card_stiff[i]->add(*_hyoff_stiff_f[i]);
+                _p_card_stiff[i]->add(*_thzoff_stiff_f);
+                _p_card_stiff[i]->y_vector() = orientation;
+
+                // tell the section property about the material property
+                _p_card_stiff[i]->set_material(*_m_card);
+
+                //_p_card_stiff[i]->set_bending_model(MAST::TIMOSHENKO);
+                //_p_card_stiff[i]->set_bending_model(MAST::BERNOULLI);
+
+                if (_if_vk) _p_card_stiff[i]->set_strain(MAST::NONLINEAR_STRAIN);
+
+                _p_card_stiff[i]->init();
+
+                // the domain ID of the stiffener is 1 plus the stiff number
+                _discipline->set_property_for_subdomain(i + 1, *_p_card_stiff[i]);
+            }
     }
 
     void _init_piston_vals() {
@@ -1227,7 +1208,7 @@ public:  // parametric constructor
         // us this solution as the base solution later if no flutter is found.
         libMesh::NumericVector<Real> &
                 steady_sol_wo_aero = _sys->add_vector("steady_sol_wo_aero");
-        steady_sol_wo_aero = *_sys->solution;
+        steady_sol_wo_aero = _sys->get_vector("base_solution");
 
 
         // now that we have the solution under the influence of thermal loads,
@@ -1321,30 +1302,6 @@ public:  // parametric constructor
                                        i);    //  time
             }
         }
-
-//        // solving the eig problem using smallest mag to obtain negative eigvalues
-//
-//        _sys->eigen_solver->set_position_of_spectrum( libMesh::SMALLEST_REAL );
-//        _sys->eigenproblem_solve( *_modal_elem_ops, *_modal_assembly);
-//
-//        unsigned int
-//                nconv_1 = std::min(_sys->get_n_converged_eigenvalues(),
-//                                   _sys->get_n_requested_eigenvalues());
-//        // vector of eigenvalues
-//        std::vector<Real> eig_vals_1(nconv_1);
-//
-//        for (unsigned int i = 0; i < nconv_1; i++) {
-//            // now write the eigenvalue
-//            Real
-//                    re = 0.,
-//                    im = 0.;
-//            _sys->get_eigenvalue(i, re, im);
-//
-//            eig_vals_1[i] = re;
-//        }
-//        _modal_assembly->clear_base_solution();
-//        _modal_assembly->clear_discipline_and_system();
-//        _modal_elem_ops->clear_discipline_and_system();
 
 
         //////////////////////////////////////////////////////////////////////
@@ -1444,20 +1401,6 @@ public:  // parametric constructor
         _nonlinear_assembly->clear_discipline_and_system();
 
 
-//        std::string nm;
-//        std::ofstream out_stress;
-//        if (comm().rank() == 0)
-//            nm ="stresses.txt";
-//        //if (comm().rank() == 1)
-//         //   nm ="stressespr1.txt";
-//
-//        out_stress.open(nm, std::ofstream::out);
-//        out_stress << std::setw(10) << "stresses"
-//                   << std::endl;
-//        for (int di = 0; di < _outputs.size(); di++)
-//            out_stress << std::setw(10) << _outputs[di]->output_total()
-//                       << std::endl;
-
         //////////////////////////////////////////////////////////////////////
         // get the objective
         //////////////////////////////////////////////////////////////////////
@@ -1494,20 +1437,6 @@ public:  // parametric constructor
         //////////////////////////////////////////////////////////////////////
 
             fvals[_n_eig+0]  =  -100.;
-
-
-
-//        std::ofstream out_f_vals;
-//        if (comm().rank() == 0) {
-//
-//            out_f_vals.open("f_vals.txt", std::ofstream::out);
-//            out_f_vals << std::setw(10) << "f_vals"
-//                       << std::endl;
-//            for (int di = 0; di < _n_ineq ; di++)
-//                out_f_vals << std::setw(10) << fvals[di]
-//                           << std::endl;
-//        }
-
 
         //////////////////////////////////////////////////////////////////
         //   evaluate sensitivity if needed
@@ -1605,7 +1534,7 @@ public:  // parametric constructor
             }
 
             _modal_assembly->set_discipline_and_system(*_discipline, *_structural_sys); // modf_w
-            _modal_assembly->set_base_solution(*_sys->solution);
+            _modal_assembly->set_base_solution(steady_sol_wo_aero);
             _modal_elem_ops->set_discipline_and_system(*_discipline, *_structural_sys);
             _nonlinear_assembly->set_discipline_and_system(*_discipline,*_structural_sys);
             _nonlinear_elem_ops->set_discipline_and_system(*_discipline,*_structural_sys);
@@ -1710,20 +1639,21 @@ public:  // parametric constructor
 
 
                 // calculate the sensitivity of the eigenvalues
-                std::vector<Real> eig_sens(nconv);
+                std::vector<Real> eig_sens(nconv,0.);
+
+                if (nconv) {
+                    _modal_assembly->set_base_solution(dXdp, true);
+                    _sys->eigenproblem_sensitivity_solve(*_modal_elem_ops,
+                                                         *_modal_assembly,
+                                                         *_problem_parameters[i],
+                                                         eig_sens);
 
 
-                _modal_assembly->set_base_solution(dXdp, true);
-                _sys->eigenproblem_sensitivity_solve( *_modal_elem_ops,
-                                                      *_modal_assembly,
-                                                      *_problem_parameters[i],
-                                                      eig_sens);
+                    _modal_assembly->clear_base_solution(true);
 
-
-                _modal_assembly->clear_base_solution(true);
-
-                for (unsigned int j = 0; j < nconv; j++) {
-                    grads[(i * _n_ineq) + j] = -_dv_scaling[i] * eig_sens[j] / 1.e7;
+                    for (unsigned int j = 0; j < nconv; j++) {
+                        grads[(i * _n_ineq) + j] = -_dv_scaling[i] * eig_sens[j] / 1.e7;
+                    }
                 }
             }
 
@@ -1734,18 +1664,6 @@ public:  // parametric constructor
             _modal_elem_ops->clear_discipline_and_system();
 
             libMesh::out << "** sensitivity analysis DONE **" << std::endl;
-
-//            std::ofstream out_grads;
-//            if (comm().rank() == 0) {
-//
-//                out_grads.open("grads.txt", std::ofstream::out);
-//                out_grads << std::setw(10) << "grads"
-//                           << std::endl;
-//                for (int di = 0; di < grads.size() ; di++)
-//                    out_grads << std::setw(10) << grads[di]
-//                               << std::endl;
-//            }
-
 
         }
     }
@@ -1780,6 +1698,7 @@ public:  // parametric constructor
 
 
         // write the solution for visualization
+        *_sys->solution = _sys->get_vector("base_solution");
 
         _stress_elem->set_discipline_and_system(*_discipline,*_structural_sys);
         _stress_assembly->set_discipline_and_system(*_discipline,*_structural_sys);
@@ -2108,7 +2027,7 @@ public:  // parametric constructor
                                         << std::setw(25) << (*_obj._p_cav)();
                             }
 
-                            std::fill(eig_vec.begin(), eig_vec.end(), 0.);
+                            eig_vec.resize(nconv);
                             for (int dj =0 ; dj < nconv; dj++){
                                 // now write the eigenvalue
                                 Real
@@ -2146,7 +2065,7 @@ public:  // parametric constructor
                         // if a negative eigenvalue is detected
                         // change flag to true to increase obj and fvals
                         // and solve the system one last time and exit
-                        if ( (eig_vec[0] < 0.0) && ( (*_obj._temp)() < max_temp) )  {
+                        if ( (eig_vec[0] < 1000.0) && ( (*_obj._temp)() < max_temp) )  {
                             _obj._if_neg_eig = true;
                             libMesh::out << " negative eigenvalue found" << std::endl;
                             (*_obj._temp)() = max_temp;
