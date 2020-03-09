@@ -406,19 +406,15 @@ public:  // parametric constructor
 
         _init_dv_vector();
 
+        _init_material(); // create the property functions for the plate
+
         _init_loads();
 
-        _init_material(); // create the property functions for the plate
+        _init_piston_vals();
 
         _init_thickness_variables_plate();
 
         _init_thickness_variables_stiff();
-
-        _init_section_property_plate(); // create the material property card
-
-        _init_section_property_stiff();
-
-        _init_piston_vals();
 
         _init_nullspace(); // initialize the null space object and assign it to the structural module
 
@@ -730,7 +726,7 @@ public:  // parametric constructor
                 th_l     = _input("thickness_lower", "", 0.001),
                 th_u     = _input("thickness_upper", "", 0.2),
                 th       = _input("thickness", "", 0.2),
-		th_stiff = _input("thickness_stiff","",0.2);
+		        th_stiff = _input("thickness_stiff","",0.2);
 
         //distance btw stations
         _dx = _length / (_n_dv_stations_x - 1);
@@ -798,6 +794,24 @@ public:  // parametric constructor
         _th_plate_f = new MAST::MultilinearInterpolation("h", _thy_station_vals);
         _thy_station_vals.clear();
 
+        _hoff_plate_f   = new MAST::SectionOffset("off",
+                                                  *_th_plate_f,
+                                                  0.);
+
+        // create the element property card
+        _p_card_plate = new MAST::Solid2DSectionElementPropertyCard;
+
+        // add the section properties to the card
+        _p_card_plate->add(*_th_plate_f);
+        _p_card_plate->add(*_hoff_plate_f);
+
+        // tell the section property about the material property
+        _p_card_plate->set_material(*_m_card);
+
+        if (_if_vk) _p_card_plate->set_strain(MAST::NONLINEAR_STRAIN);
+
+        _discipline->set_property_for_subdomain(0, *_p_card_plate);
+
     }
 
     void _init_material() {
@@ -840,28 +854,6 @@ public:  // parametric constructor
         _m_card->add(*rho_f);
         _m_card->add(*kappa_f);
         _m_card->add(*alpha_f);
-
-    }
-
-    void _init_section_property_plate(){
-
-        _hoff_plate_f   = new MAST::SectionOffset("off",
-                                                  *_th_plate_f,
-                                                  0.);
-
-        // create the element property card
-        _p_card_plate = new MAST::Solid2DSectionElementPropertyCard;
-
-        // add the section properties to the card
-        _p_card_plate->add(*_th_plate_f);
-        _p_card_plate->add(*_hoff_plate_f);
-
-        // tell the section property about the material property
-        _p_card_plate->set_material(*_m_card);
-
-        if (_if_vk) _p_card_plate->set_strain(MAST::NONLINEAR_STRAIN);
-
-        _discipline->set_property_for_subdomain(0, *_p_card_plate);
 
     }
 
@@ -919,10 +911,7 @@ public:  // parametric constructor
                 _problem_parameters[(2 * i + 1) * _n_dv_stations_x + j] = h_y;
                 _problem_parameters[(2 * i + 2) * _n_dv_stations_x + j] = h_z;
             }
-        }
-    }
 
-    void _init_section_property_stiff() {
 
             _thzoff_stiff_f = new MAST::ConstantFieldFunction("hz_off", *_zero);
             RealVectorX orientation = RealVectorX::Zero(3);
@@ -931,7 +920,7 @@ public:  // parametric constructor
             // property card per stiffener
             _p_card_stiff.resize(_n_stiff);
 
-            for (unsigned int i = 0; i < _n_stiff; i++) {
+
                 // now create the h_y function and give it to the property card
                 _thy_stiff_f[i] = new MAST::MultilinearInterpolation("hy", _thy_station_vals);
                 _thz_stiff_f[i] = new MAST::MultilinearInterpolation("hz", _thz_station_vals);
@@ -2065,7 +2054,10 @@ public:  // parametric constructor
                         // if a negative eigenvalue is detected
                         // change flag to true to increase obj and fvals
                         // and solve the system one last time and exit
-                        if ( (eig_vec[0] < 1000.0) && ( (*_obj._temp)() < max_temp) )  {
+
+                        auto min_eig = std::min(eig_vec.begin(), eig_vec.end());
+
+                        if ( (*min_eig < 1000.0) && ( (*_obj._temp)() < max_temp) )  {
                             _obj._if_neg_eig = true;
                             libMesh::out << " negative eigenvalue found" << std::endl;
                             (*_obj._temp)() = max_temp;
@@ -2161,7 +2153,7 @@ int main(int argc, char* argv[]) {
 
     MAST::GCMMAOptimizationInterface optimizer;
     
-    
+
     unsigned int
             max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 15);
 
