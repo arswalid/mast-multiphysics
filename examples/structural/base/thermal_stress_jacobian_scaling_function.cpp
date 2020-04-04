@@ -92,7 +92,7 @@ MAST::Examples::ThermalJacobianScaling::operator() (Real& val) const {
         if (max_res > 0.)
             max_log = std::log10(max_res);
        val      = std::fmax(std::pow(1-res/max_res, _accel_factor), low);
-        //libMesh::out << log << " " << max_log << " " << val << std::endl;
+        libMesh::out << log << " " << max_log << " " << val << std::endl;
     }
 }
 

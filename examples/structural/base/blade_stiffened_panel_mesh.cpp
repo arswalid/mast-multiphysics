@@ -30,7 +30,7 @@
 // libMesh includes
 #include "libmesh/serial_mesh.h"
 #include "libmesh/mesh_generation.h"
-
+#include "libmesh/boundary_info.h"
 
 
 void

@@ -282,7 +282,6 @@ public:  // parametric constructor
     StiffenedPlateThermallyStressedPistonTheorySizingOptimization(const libMesh::Parallel::Communicator &comm,
                                                                   MAST::Examples::GetPotWrapper& input) :
             MAST::FunctionEvaluation (comm),
-            _initialized(false),
             _input(input),
             _n_eig(0),
             _n_divs_x(0),
@@ -294,52 +293,72 @@ public:  // parametric constructor
             _n_dv_stations_x(0),
             _n_load_steps(0),
             _mesh(nullptr),
-            _eq_sys(nullptr),
-            _sys(nullptr),
-            _structural_sys(nullptr),
-            _discipline(nullptr),
-            _nonlinear_assembly(nullptr),
-            _modal_assembly(nullptr),
-            _fsi_assembly(nullptr),
-            _jac_scaling(nullptr),
+            
             _hoff_plate_f(nullptr),
+            
+            
             _weight(nullptr),
             _m_card(nullptr),
-            _p_card_plate(nullptr),
+            
             _dirichlet_left(nullptr),
             _dirichlet_right(nullptr),
             _dirichlet_bottom(nullptr),
             _dirichlet_top(nullptr),
+            
             _T_load(nullptr),
             _p_load(nullptr),
             _piston_bc(nullptr),
-            _flutter_solver(nullptr),
-            _stress_assembly(nullptr),
-            _stress_elem(nullptr),
-            _modal_elem_ops(nullptr),
-            _nonlinear_elem_ops(nullptr),
+            
+            
+            
             _length(0.),
             _width(0.),
+            
             _stress_limit(0.),
             _V0_flutter(0.),
-            _nsp(nullptr),
             _dx(0.),
+            
+            
             _if_vk(false),
             _zero(nullptr),
             _thzoff_stiff_f(nullptr),
-            _temp(nullptr),
-            _p_cav(nullptr),
+            _nsp(nullptr),
             _mach(nullptr),
             _rho_air(nullptr),
             _gamma_air(nullptr),
-            _velocity(nullptr),
+            
+            
+            _velocity_f(nullptr),
+            
             _mach_f(nullptr),
             _rho_air_f(nullptr),
             _gamma_air_f(nullptr),
-            _velocity_f(nullptr),
+            _sys(nullptr),
+            _temp(nullptr),
+            _p_cav(nullptr),
+            
+            _velocity(nullptr),
+            
+            _initialized(false),
+            
+            _p_card_plate(nullptr),
+            _structural_sys(nullptr),
+            _discipline(nullptr),
+            _jac_scaling(nullptr),
+            _nonlinear_assembly(nullptr),
+            _modal_assembly(nullptr),
+            
+            _fsi_assembly(nullptr),
+            _flutter_solver(nullptr),
+            _eq_sys(nullptr),
+            _nonlinear_elem_ops(nullptr),
+            _stress_assembly(nullptr),
+            _modal_elem_ops(nullptr),
+            
             _p_val(0.),
             _vm_rho(0.),
             _if_continuation_solver(false),
+            _stress_elem(nullptr),
             _if_neg_eig(false)
 
 //        _thy_station_vals(nullptr),
@@ -1155,8 +1174,9 @@ public:  // parametric constructor
                     << std::setw(20) << (*_problem_parameters[i])() << std::endl;
 
         bool
-                if_write_output = true;
+        if_write_output = _input("if_write_output", "print outputs", false);
 
+        
         //////////////////////////////////////////////////////////////////////
         libMesh::out << " calculation of wheight " << std::endl;
         // the optimization problem is defined as
@@ -1192,7 +1212,6 @@ public:  // parametric constructor
 
         steady_solve.solve();
 
-//        libmesh_error();
 
         // us this solution as the base solution later if no flutter is found.
         libMesh::NumericVector<Real> &
@@ -1292,57 +1311,18 @@ public:  // parametric constructor
             }
         }
 
-
+        if (if_write_output)
+            *_sys->solution = steady_sol_wo_aero;
+        
         //////////////////////////////////////////////////////////////////////
         // perform the flutter analysis
         //////////////////////////////////////////////////////////////////////
 
-        std::pair<bool, MAST::FlutterRootBase *> sol(false, nullptr);
-
-        // perform flutter analysis only if all modal eigenvalues are positive
-        if_all_eig_positive = false;
-        if (if_all_eig_positive) {
-
-            // the flutter solver calculates the stability eigenvalues about
-            // an equilibrium state that includes the aerodynamic loads. The
-            // stability analysis starts with V=0, which corresponds to the
-            // equilibrium state calculated for the thermal loads. However,
-            // a new equilibrium state is calculated for each velocity. So,
-            // the flutter root, if found will depend on the equilibrium state
-            // which, in turn, depends on the velocity.
-
-            _fsi_assembly->set_discipline_and_system(*_discipline,
-                                                     *_structural_sys);
-            _fsi_assembly->set_base_solution(steady_solve.solution());
-            _flutter_solver->clear_solutions();
-            _flutter_solver->attach_assembly(*_fsi_assembly);
-            _flutter_solver->attach_steady_solver(steady_solve);
-            _flutter_solver->initialize(*_velocity,
-                                        0.0e3,                // lower V
-                                        2 * _V0_flutter,        // upper V
-                                        _n_V_divs_flutter,    // number of divisions
-                                        _basis);              // basis vectors
-
-            sol = _flutter_solver->analyze_and_find_critical_root_without_tracking(1.e-3, 20);
-            _flutter_solver->print_sorted_roots();
-            _fsi_assembly->clear_discipline_and_system();
-            _flutter_solver->clear_assembly_object();
-        }
-        else {
-            libMesh::out
-                    << "** Negative frequency: skipping flutter analysis **"
-                    << std::endl;
-        }
-
-        // if the flutter root was not found, then we will use the steady sol wo
-        // aero as the base solution for all the following computations
-        // Otherwise, the equilibrium state is dependent on the velocity.
-        if (!sol.second) {
-            // velocity should be set to zero for all residual calculations
-            (*_velocity) = 0.;
-            steady_solve.solution() = steady_sol_wo_aero;
-            *_sys->solution = steady_sol_wo_aero;
-        }
+        // velocity should be set to zero for all residual calculations
+        (*_velocity) = 0.;
+        steady_solve.solution() = steady_sol_wo_aero;
+        *_sys->solution = steady_sol_wo_aero;
+        
 
         //////////////////////////////////////////////////////////////////////
         //  plot stress solution
@@ -1366,18 +1346,6 @@ public:  // parametric constructor
             _stress_elem->clear_discipline_and_system();
             _stress_assembly->clear_discipline_and_system();
         }
-
-
-        if (sol.second && if_write_output) {
-
-            MAST::plot_structural_flutter_solution("structural_flutter_mode.exo",
-                                                   *_sys,
-                                                   sol.second->eig_vec_right,
-                                                   _basis);
-        }
-
-
-
 
         //////////////////////////////////////////////////////////////////////
         // now calculate the stress output based on the velocity output
@@ -1483,45 +1451,9 @@ public:  // parametric constructor
             libMesh::NumericVector<Real> &dXdV = _sys->add_vector("sol_V_sens");
             std::vector<Real> dsigma_dV(_outputs.size(), 0.);
 
-            if (sol.second) {
-                libmesh_error();
-                //params[0].second = _velocity;
-
-                _nonlinear_assembly->set_discipline_and_system(*_discipline,
-                                                               *_structural_sys);
-
-                _nonlinear_elem_ops->set_discipline_and_system(*_discipline, *_structural_sys);
-
-                _sys->sensitivity_solve(*_nonlinear_elem_ops,
-                                        *_nonlinear_assembly,
-                                        *_velocity,
-                                        false);
-
-                dXdV = _sys->get_sensitivity_solution(0);
-
-                // This accounts for the dependence of equilibrium state on velocity
-                // dsigma/dp   =  par sigma/par p + par sigma/ par V dV/dp
-                this->clear_stresss();
-
-                libMesh::NumericVector<Real>& dxdp = _sys->add_vector("dxdp");
-
-                for (int i=0; i < _outputs.size(); i++) {
-                    _nonlinear_assembly->calculate_output_direct_sensitivity(*(_sys->solution),
-                                                                             &dxdp,
-                                                                             *_velocity,
-                                                                             *_outputs[i]);
-                }
-                for (unsigned int j = 0; j < _outputs.size(); j++)
-                    dsigma_dV[j] = _outputs[j]->output_sensitivity_total(*_velocity);
-                            //von_Mises_p_norm_functional_sensitivity_for_all_elems
-                            //(pval, _velocity);
-
-                _nonlinear_assembly->clear_discipline_and_system();
-            }
-            else {
-                dXdV.zero();
-            }
-
+            // no flutter solution
+            dXdV.zero();
+            
             _modal_assembly->set_discipline_and_system(*_discipline, *_structural_sys); // modf_w
             _modal_assembly->set_base_solution(steady_sol_wo_aero);
             _modal_elem_ops->set_discipline_and_system(*_discipline, *_structural_sys);
@@ -1546,7 +1478,7 @@ public:  // parametric constructor
 
                 for (unsigned int j = 0 ; j < _mesh->n_elem(); j++){
                     // evaluate sensitivity of the outputs
-                    _nonlinear_assembly->calculate_output_direct_sensitivity(*(_sys->solution),
+                    _nonlinear_assembly->calculate_output_direct_sensitivity(steady_sol_wo_aero,
                                                                              &dXdp,
                                                                              *(_problem_parameters[i]),
                                                                              *(_outputs[j])  );
@@ -1566,66 +1498,10 @@ public:  // parametric constructor
 
                 // if all eigenvalues are positive, calculate at the sensitivity of
                 // flutter velocity
-
-
-                // first block not used no flutter solution
-
-                if (if_all_eig_positive && sol.second) {
-                    libmesh_error();
-
-                    //
-                    //           g = V0/Vf - 1 <= 0
-                    //   Hence, sensitivity is
-                    //   -V0/Vf^2  dVf
-                    //
-                    libmesh_error();
-                    _fsi_assembly->set_base_solution(steady_solve.solution());
-                    _fsi_assembly->set_base_solution(dXdp, true);
-                    _fsi_assembly->set_discipline_and_system(*_discipline, *_structural_sys);
-                    _flutter_solver->attach_assembly(*_fsi_assembly);
-                    _flutter_solver->calculate_sensitivity(*sol.second,
-                                                           *_problem_parameters[i],
-                                                           &dXdp,
-                                                           &dXdV);
-                    _fsi_assembly->clear_discipline_and_system();
-                    _flutter_solver->clear_assembly_object();
-
-                    grads[(i * _n_ineq) + (_n_eig + 0)] = -(_dv_scaling[i] *
-                                                            _V0_flutter / pow(sol.second->V, 2) *
-                                                            sol.second->V_sens);
-
-                    // add the partial derivative of stress due to velocity sensitivity
-                    for (unsigned int j = 0; j < _outputs.size(); j++)
-                        grads[(i * _n_ineq) + (j + _n_eig + 1 )] += _dv_scaling[i] / _stress_limit *
-                                                                            dsigma_dV[j] * sol.second->V_sens;
-
-                    // The natural frequencies were calculated about a base solution
-                    // that did not include the aerodynamic loads. Hence, we will
-                    // use a different base soltuion here that what was used for
-                    // flutter solution. However, a new sensitivity solution is required
-                    // for this state, since the previous dXdp was calculated for
-                    // X including aero loads.
-                    dXdp.zero();
-
-                    // sensitivity analysis
-                    (*_velocity) = 0.;
-                    *_sys->solution = steady_sol_wo_aero;
-                    _nonlinear_assembly->set_discipline_and_system(*_discipline,
-                                                                   *_structural_sys);
-                    _nonlinear_elem_ops->set_discipline_and_system(*_discipline,
-                                                                   *_structural_sys);
-                    _sys->sensitivity_solve(*_nonlinear_elem_ops,
-                                            *_nonlinear_assembly,
-                                            *_problem_parameters[i],
-                                            true);
-
-                    _nonlinear_assembly->clear_discipline_and_system();
-                    _nonlinear_elem_ops->clear_discipline_and_system();
-                } else {
-                    // if no root was found, then set the sensitivity to a zero value
-                    grads[(i * _n_ineq) + (_n_eig + 0)] = 0.;
-                }
-
+                // if no root was found, then set the sensitivity to a zero value
+                
+                grads[(i * _n_ineq) + (_n_eig + 0)] = 0.;
+                
 
                 // calculate the sensitivity of the eigenvalues
                 std::vector<Real> eig_sens(nconv,0.);
@@ -1918,8 +1794,8 @@ public:  // parametric constructor
                         dof_num = nd->dof_number(0, 2, 0);
 
                 unsigned int
-                        n_temp_steps  = _obj._input( "n_temp_steps", "number of load steps for temperature increase",  1000),
-                        n_press_steps = 0;
+                n_temp_steps  = _obj._input( "n_temp_steps", "number of load steps for temperature increase",  1000);
+                        
 
                 // write the header to the load.txt file
 
@@ -2055,15 +1931,21 @@ public:  // parametric constructor
                         // change flag to true to increase obj and fvals
                         // and solve the system one last time and exit
 
-                        auto min_eig = std::min(eig_vec.begin(), eig_vec.end());
-
-                        if ( (*min_eig < 1000.0) && ( (*_obj._temp)() < max_temp) )  {
+                        auto min_eig  = std::min_element(eig_vec.begin(),eig_vec.end());
+                        if ( (*min_eig < 100.0) && ( (*_obj._temp)() < max_temp) )  {
                             _obj._if_neg_eig = true;
                             libMesh::out << " negative eigenvalue found" << std::endl;
                             (*_obj._temp)() = max_temp;
                             break;
                         }
 
+                        if (  (*_obj._temp)() < 0.0 )   {
+                            _obj._if_neg_eig = true;
+                            libMesh::out << " Continuation solver diverged" << std::endl;
+                            (*_obj._temp)() = max_temp;
+                            break;
+                        }
+                        
                         // if the temperature given by the solver is bigger than tmax
                         // go back to tmax and solve the system one more time and exit
                         if ((*_obj._temp)() > max_temp) {
