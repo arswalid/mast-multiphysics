@@ -75,16 +75,54 @@ namespace MAST {
         virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
         prestress_B_matrix(MAST::ElementBase& e) const;
 
-        
         virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
         thermal_conductance_matrix(const MAST::ElementBase& e) const;
         
-
         virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
         thermal_capacitance_matrix(const MAST::ElementBase& e) const;
 
-        virtual const MAST::FieldFunction<Real>&
+        virtual const MAST::FieldFunction<Real>*
         section(const MAST::ElementBase& e) const;
+        
+        virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
+        stiffness_A_matrix() const;
+        
+        virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
+        stiffness_B_matrix() const;
+        
+        virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
+        stiffness_D_matrix() const;
+        
+        virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
+        damping_matrix() const;
+        
+        virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
+        inertia_matrix() const;
+        
+        virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
+        thermal_expansion_A_matrix() const;
+        
+        virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
+        thermal_expansion_B_matrix() const;
+        
+        virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
+        transverse_shear_stiffness_matrix() const;
+        
+        virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
+        prestress_A_matrix() const;
+        
+        virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
+        prestress_B_matrix() const;
+        
+        virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
+        thermal_conductance_matrix() const;
+        
+        virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
+        thermal_capacitance_matrix() const;
+
+        virtual const MAST::FieldFunction<Real>*
+        section() const;
+        
 
         /*!
          *    sets the material card
@@ -179,6 +217,33 @@ namespace MAST {
          *   section area moment of inertia
          */
         virtual MAST::FieldFunction<RealMatrixX>& I();
+        
+        /*!
+         *   @returns constant reference to the function that calculates the 
+         *   shear coeffcients (kappa)
+         */
+        virtual const MAST::FieldFunction<RealMatrixX>& Kap() const;
+        
+        
+        /*!
+         *   @returns constant reference to the function that calculates the 
+         *   warping constant
+         */
+        virtual const MAST::FieldFunction<Real>& Gam() const;
+        
+        
+        /*!
+         *   @returns reference to the function that calculates the 
+         *   shear coeffcients (kappa)
+         */
+        virtual MAST::FieldFunction<RealMatrixX>& Kap();
+        
+        
+        /*!
+         *   @returns reference to the function that calculates the 
+         *   warping constant
+         */
+        virtual MAST::FieldFunction<Real>& Gam();
 
         /*!
          *  returns true if the property card depends on the function \p f
@@ -210,6 +275,10 @@ namespace MAST {
         std::unique_ptr<MAST::FieldFunction<Real> > _Az;
         
         std::unique_ptr<MAST::FieldFunction<RealMatrixX> > _AI;
+        
+        std::unique_ptr<MAST::FieldFunction<RealMatrixX> > _Kappa;
+        
+        std::unique_ptr<MAST::FieldFunction<Real> > _Gamma;
         
         std::unique_ptr<MAST::FieldFunction<RealMatrixX> > _stiff_A;
 

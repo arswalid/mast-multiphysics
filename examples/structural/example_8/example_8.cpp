@@ -373,7 +373,6 @@ public:
         penalty   = _input("rho_penalty", "penalty parameter of volume fraction", 4.),
         rhoval    = _input("rho", "material density", 2700.),
         nu_val    = _input("nu", "Poisson's ratio",  0.33),
-        kappa_val = _input("kappa", "shear correction factor",  5./6.),
         kval      = _input("k", "thermal conductivity",  1.e-2),
         cpval     = _input("cp", "thermal capacitance",  864.);
         
@@ -381,14 +380,12 @@ public:
         MAST::Parameter
         *rho       = new MAST::Parameter("rho",      rhoval),
         *nu        = new MAST::Parameter("nu",       nu_val),
-        *kappa     = new MAST::Parameter("kappa", kappa_val),
         *k         = new MAST::Parameter("k",          kval),
         *cp        = new MAST::Parameter("cp",        cpval);
         
         MAST::ConstantFieldFunction
         *rho_f   = new MAST::ConstantFieldFunction(  "rho",    *rho),
         *nu_f    = new MAST::ConstantFieldFunction(   "nu",     *nu),
-        *kappa_f = new MAST::ConstantFieldFunction("kappa",  *kappa),
         *k_f     = new MAST::ConstantFieldFunction( "k_th",      *k),
         *cp_f    = new MAST::ConstantFieldFunction(   "cp",     *cp);
 
@@ -396,13 +393,11 @@ public:
 
         _parameters[  rho->name()]     = rho;
         _parameters[   nu->name()]     = nu;
-        _parameters[kappa->name()]     = kappa;
         _parameters[    k->name()]     = k;
         _parameters[   cp->name()]     = cp;
         _field_functions.insert(_Ef);
         _field_functions.insert(rho_f);
         _field_functions.insert(nu_f);
-        _field_functions.insert(kappa_f);
         _field_functions.insert(k_f);
         _field_functions.insert(cp_f);
 
@@ -411,7 +406,6 @@ public:
         _m_card1->add(*_Ef);
         _m_card1->add(*rho_f);
         _m_card1->add(*nu_f);
-        _m_card1->add(*kappa_f);
         _m_card1->add(*k_f);
         _m_card1->add(*cp_f);
         
@@ -419,7 +413,6 @@ public:
         _m_card2->add(*_Ef);
         _m_card2->add(*rho_f);
         _m_card2->add(*nu_f);
-        _m_card2->add(*kappa_f);
         _m_card2->add(*k_f);
         _m_card2->add(*cp_f);
     }
@@ -434,20 +427,25 @@ public:
         
         
         Real
+        kappa_val = _input("kappa", "shear correction factor",  5./6.),
         th_v      =  _input("th", "thickness of 2D element",  0.001);
         
         MAST::Parameter
         *th       = new MAST::Parameter("th", th_v),
+        *kappa    = new MAST::Parameter("kappa", kappa_val),
         *zero     = new MAST::Parameter("zero", 0.);
         
         MAST::ConstantFieldFunction
         *th_f     = new MAST::ConstantFieldFunction("h",       *th),
+        *kappa_f = new MAST::ConstantFieldFunction("kappa",  *kappa),
         *hoff_f   = new MAST::ConstantFieldFunction("off",   *zero);
         
         
         _parameters[th->name()]    = th;
+        _parameters[kappa->name()] = kappa;
         _parameters[zero->name()]  = zero;
         _field_functions.insert(th_f);
+        _field_functions.insert(kappa_f);
         _field_functions.insert(hoff_f);
         
         MAST::Solid2DSectionElementPropertyCard
@@ -465,11 +463,13 @@ public:
 
         p_card1->add(*th_f);
         p_card1->add(*hoff_f);
+        p_card1->add(*kappa_f);
         p_card1->set_material(*_m_card1);
 
         // property card for void
         p_card2->add(*th_f);
         p_card2->add(*hoff_f);
+        p_card2->add(*kappa_f);
         p_card2->set_material(*_m_card2);
         
         _discipline->set_property_for_subdomain(0, *p_card1);
@@ -727,7 +727,7 @@ public:
         // evaluate the functions
         //////////////////////////////////////////////////////////////////////
 
-        perimeter_assembly.calculate_output(*_level_set_sys->solution, perimeter);
+        perimeter_assembly.calculate_output(*_level_set_sys->solution, true, perimeter);
         
         Real
         max_vm = 0.,
@@ -748,7 +748,7 @@ public:
 
             // if the shifted boundary is implementing a traction-free condition
             // compliance does not need contribution from shifted boundary load
-            nonlinear_assembly.calculate_output(*_sys->solution, compliance);
+            nonlinear_assembly.calculate_output(*_sys->solution, true, compliance);
             comp      = compliance.output_total();
             obj       = _obj_scaling * (comp + _perimeter_penalty * per);
             fvals[0]  = vol/_volume - vf; // vol/vol0 - a <=
@@ -758,7 +758,7 @@ public:
             
             // set the elasticity penalty for stress evaluation
             _Ef->set_penalty_val(stress_penalty);
-            nonlinear_assembly.calculate_output(*_sys->solution, stress);
+            nonlinear_assembly.calculate_output(*_sys->solution, true, stress);
             max_vm    = stress.get_maximum_von_mises_stress();
             vm_agg    = stress.output_total();
             obj       = _obj_scaling * (vol + _perimeter_penalty * per);
@@ -967,7 +967,9 @@ public:
             // if the perimeter output was specified then compute the sensitivity
             // and add to the grad vector
             assembly.calculate_output_direct_sensitivity(*_level_set_sys->solution,
+                                                         true,
                                                          dphi_filtered.get(),
+                                                         true,
                                                          *_dv_params[i].second,
                                                          perimeter);
             
@@ -990,7 +992,7 @@ public:
      MAST::NonlinearImplicitAssembly& nonlinear_assembly,
      std::vector<Real>& grads) {
         
-        _sys->adjoint_solve(nonlinear_elem_ops, stress, nonlinear_assembly, false);
+        _sys->adjoint_solve(*_sys->solution, true, nonlinear_elem_ops, stress, nonlinear_assembly, false);
         
         std::unique_ptr<libMesh::NumericVector<Real>>
         dphi_base(_level_set_sys->solution->zero_clone().release()),
@@ -1028,6 +1030,7 @@ public:
             
             grads[1*i+0] = 1./_stress_lim*
             nonlinear_assembly.calculate_output_adjoint_sensitivity(*_sys->solution,
+                                                                    true,
                                                                     _sys->get_adjoint_solution(),
                                                                     *_dv_params[i].second,
                                                                     nonlinear_elem_ops,
@@ -1036,7 +1039,9 @@ public:
 
             _Ef->set_penalty_val(stress_penalty);
             nonlinear_assembly.calculate_output_direct_sensitivity(*_sys->solution,
+                                                                   true,
                                                                    nullptr,
+                                                                   false,
                                                                    *_dv_params[i].second,
                                                                    stress);
             grads[1*i+0] += 1./_stress_lim* stress.output_sensitivity_total(*_dv_params[i].second);
@@ -1060,7 +1065,7 @@ public:
         // Adjoint solution for compliance = - X
         // if the shifted boundary is implementing a traction-free condition
         // compliance does not need contribution from shifted boundary load
-        _sys->adjoint_solve(nonlinear_elem_ops, compliance, nonlinear_assembly, false);
+        _sys->adjoint_solve(*_sys->solution, true, nonlinear_elem_ops, compliance, nonlinear_assembly, false);
 
         std::unique_ptr<libMesh::NumericVector<Real>>
         dphi_base(_level_set_sys->solution->zero_clone().release()),
@@ -1094,6 +1099,7 @@ public:
             //////////////////////////////////////////////////////////////////////
             grads[i] = 1. *
             nonlinear_assembly.calculate_output_adjoint_sensitivity(*_sys->solution,
+                                                                    true,
                                                                     _sys->get_adjoint_solution(),
                                                                     *_dv_params[i].second,
                                                                     nonlinear_elem_ops,

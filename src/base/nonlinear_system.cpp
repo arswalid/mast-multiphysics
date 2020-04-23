@@ -228,6 +228,10 @@ MAST::NonlinearSystem::solve(MAST::AssemblyElemOperations& elem_ops,
     
     libMesh::NonlinearImplicitSystem::solve();
     
+    // enforce constraints on the solution since NonlinearImplicitSystem only
+    // enforces the constraints on current_local_solution.
+    this->get_dof_map().enforce_constraints_exactly(*this, this->solution.get());
+    
     this->nonlinear_solver->residual_and_jacobian_object = old_ptr;
     
     assembly.clear_elem_operation_object();
@@ -760,7 +764,9 @@ initialize_condensed_dofs(MAST::PhysicsDisciplineBase& physics) {
 
 
 void
-MAST::NonlinearSystem::sensitivity_solve(MAST::AssemblyElemOperations& elem_ops,
+MAST::NonlinearSystem::sensitivity_solve(const libMesh::NumericVector<Real>& X,
+                                         bool if_localize_sol,
+                                         MAST::AssemblyElemOperations& elem_ops,
                                          MAST::AssemblyBase&           assembly,
                                          const MAST::FunctionBase&     p,
                                          bool                          if_assemble_jacobian) {
@@ -779,8 +785,8 @@ MAST::NonlinearSystem::sensitivity_solve(MAST::AssemblyElemOperations& elem_ops,
     &rhs   = this->add_sensitivity_rhs();
 
     if (if_assemble_jacobian)
-        assembly.residual_and_jacobian(*solution, nullptr, matrix, *this);
-    assembly.sensitivity_assemble(p, rhs);
+        assembly.residual_and_jacobian(X, nullptr, matrix, *this);
+    assembly.sensitivity_assemble(X, if_localize_sol, p, rhs);
     
     rhs.scale(-1.);
     
@@ -815,7 +821,9 @@ MAST::NonlinearSystem::sensitivity_solve(MAST::AssemblyElemOperations& elem_ops,
 
 
 void
-MAST::NonlinearSystem::adjoint_solve(MAST::AssemblyElemOperations&       elem_ops,
+MAST::NonlinearSystem::adjoint_solve(const libMesh::NumericVector<Real>& X,
+                                     bool if_localize_sol,
+                                     MAST::AssemblyElemOperations&       elem_ops,
                                      MAST::OutputAssemblyElemOperations& output,
                                      MAST::AssemblyBase&                 assembly,
                                      bool if_assemble_jacobian) {
@@ -837,7 +845,7 @@ MAST::NonlinearSystem::adjoint_solve(MAST::AssemblyElemOperations&       elem_op
     if (if_assemble_jacobian)
         assembly.residual_and_jacobian(*solution, nullptr, matrix, *this);
     
-    assembly.calculate_output_derivative(*solution, output, rhs);
+    assembly.calculate_output_derivative(X, if_localize_sol, output, rhs);
 
     assembly.clear_elem_operation_object();
 
