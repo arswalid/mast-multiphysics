@@ -108,7 +108,7 @@ namespace MAST
         virtual std::unique_ptr<MAST::FieldFunction<RealMatrixX> >
         thermal_capacitance_matrix(const MAST::ElementBase& e) const= 0;
 
-        virtual const MAST::FieldFunction<Real>&
+        virtual const MAST::FieldFunction<Real>*
         section(const MAST::ElementBase& e) const = 0;
 
         
@@ -125,6 +125,49 @@ namespace MAST
          */
         virtual const MAST::MaterialPropertyCardBase& get_material() const {
             libmesh_error();
+        }
+        
+        
+        /*!
+         *   return the material property. This needs to be reimplemented
+         *   for individual card type, and should be used only for isotropic
+         *   cards.
+         * 
+         *   Added by DJN. Reference cplusplus.com/forum/beginner/10639
+         */
+        virtual const MAST::MaterialPropertyCardBase& set_material(MAST::MaterialPropertyCardBase& mat) const {
+            libmesh_error_msg("Not Implemented, this needs to be reimplemented for individual card type; In " << __PRETTY_FUNCTION__ << " in " << __FILE__ << " at line " << __LINE__);
+        }
+        
+        
+        /*!
+         *   vector in the x-y plane of the element. This should not be the same
+         *   as the element x-axis.
+         *   Only used by 1D sections. Added for polymorphism enhancement.
+         *   Added by DJN.
+         */
+        virtual RealVectorX& y_vector() {
+            libmesh_error_msg("Not Implemented, this needs to be reimplemented for individual card type; In " << __PRETTY_FUNCTION__ << " in " << __FILE__ << " at line " << __LINE__);
+        }
+        
+
+        /*!
+         *   constant reference to vector in the x-y plane of the element. 
+         *   This should not be the same as the element x-axis.
+         *   Only used by 1D sections. Added for polymorphism enhancement.
+         *   Added by DJN. 
+         */
+        virtual const RealVectorX& y_vector() const {
+            libmesh_error_msg("Not Implemented, this needs to be reimplemented for individual card type; In " << __PRETTY_FUNCTION__ << " in " << __FILE__ << " at line " << __LINE__);
+        }
+        
+        /*!
+         * Only used by 1D sections. Added for polymorphism enhancement.
+         * 
+         * Added by DJN.
+         */
+        virtual void init() {
+            libmesh_error_msg("Not Implemented, this needs to be reimplemented for individual card type; In " << __PRETTY_FUNCTION__ << " in " << __FILE__ << " at line " << __LINE__);
         }
         
         
@@ -148,6 +191,15 @@ namespace MAST
          */
         const MAST::StrainType strain_type() const {
             return _strain_type;
+        }
+        
+        
+        /*!
+         *   sets the bending model to be used for the 1D element
+         *   Added by DJN to increase section polymorphism
+         */
+        virtual void set_bending_model(MAST::BendingOperatorType b)  {
+            libmesh_error_msg("Not implemented, this needs to be reimplemented for individual card type; In " << __PRETTY_FUNCTION__ << " in " << __FILE__ << " at line " << __LINE__);
         }
         
         
@@ -176,6 +228,11 @@ namespace MAST
         }
         
         
+        virtual bool get_warping_only() const
+        {
+            return _warping_only;
+        }
+        
     protected:
         
         /*!
@@ -187,6 +244,8 @@ namespace MAST
          *    flag to use a diagonal mass matrix. By default, this is false
          */
         bool _diagonal_mass;
+        
+        bool _warping_only = false;
     };
     
 }
