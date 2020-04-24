@@ -816,7 +816,15 @@ public:  // parametric constructor
         // add the section properties to the card
         _p_card_plate->add(*_th_plate_f);
         _p_card_plate->add(*_hoff_plate_f);
-
+        
+        Real
+                    kappa_val = _input("kappa", "shear correction factor",  5./6.);
+        MAST::Parameter
+            *kappa    = new MAST::Parameter("kappa", kappa_val);
+        MAST::ConstantFieldFunction
+            *kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
+        
+        _p_card_plate->add(*kappa_f);
         // tell the section property about the material property
         _p_card_plate->set_material(*_m_card);
 
@@ -933,7 +941,17 @@ public:  // parametric constructor
             // add the section properties to the card
             _p_card_stiff[i]->add(*_th_stiff_f[i]);
             _p_card_stiff[i]->add(*_hoff_stiff_f[i]);
+            
 
+
+             Real
+                         kappa_val = _input("kappa", "shear correction factor",  5./6.);
+             MAST::Parameter
+                 *kappa    = new MAST::Parameter("kappa", kappa_val);
+             MAST::ConstantFieldFunction
+                 *kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
+             
+             _p_card_stiff[i]->add(*kappa_f);
             // tell the section property about the material property
             _p_card_stiff[i]->set_material(*_m_card);
 

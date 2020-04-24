@@ -825,6 +825,16 @@ public:  // parametric constructor
         _p_card_plate->add(*_th_plate_f);
         _p_card_plate->add(*_hoff_plate_f);
 
+        
+        Real
+                    kappa_val = _input("kappa", "shear correction factor",  5./6.);
+        MAST::Parameter
+            *kappa    = new MAST::Parameter("kappa", kappa_val);
+        MAST::ConstantFieldFunction
+            *kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
+        
+        _p_card_plate->add(*kappa_f);
+
         // tell the section property about the material property
         _p_card_plate->set_material(*_m_card);
 
@@ -843,25 +853,21 @@ public:  // parametric constructor
                 *E,
                 *alpha,
                 *nu,
-                *kappa,
                 *rho;
         MAST::ConstantFieldFunction
                 *E_f,
                 *nu_f,
                 *alpha_f,
-                *kappa_f,
                 *rho_f;
 
 
         E = new MAST::Parameter("E", _input("E", "", 72.e9));
         nu = new MAST::Parameter("nu", _input("nu", "", 0.33));
-        kappa = new MAST::Parameter("kappa", _input("kappa", "", 5. / 6.));
         alpha = new MAST::Parameter("alpha", _input("alpha", "", 2.5e-5));
         rho = new MAST::Parameter("rho", _input("rho", "", 2700.0));
 
         E_f = new MAST::ConstantFieldFunction("E", *E);
         nu_f = new MAST::ConstantFieldFunction("nu", *nu);
-        kappa_f = new MAST::ConstantFieldFunction("kappa", *kappa);
         alpha_f = new MAST::ConstantFieldFunction("alpha_expansion", *alpha);
         rho_f = new MAST::ConstantFieldFunction("rho", *rho);
 
@@ -872,7 +878,6 @@ public:  // parametric constructor
         _m_card->add(*E_f);
         _m_card->add(*nu_f);
         _m_card->add(*rho_f);
-        _m_card->add(*kappa_f);
         _m_card->add(*alpha_f);
 
     }
@@ -950,6 +955,14 @@ public:  // parametric constructor
 
                 _p_card_stiff[i] = new MAST::Solid1DSectionElementPropertyCard;
 
+                MAST::Parameter kappa_yy("kappa_yy", 5./6.);
+                MAST::Parameter kappa_zz("kappa_zz", 5./6.);
+                
+                MAST::ConstantFieldFunction kappa_yy_f("Kappayy", kappa_yy);
+                MAST::ConstantFieldFunction kappa_zz_f("Kappazz", kappa_zz);
+                
+                _p_card_stiff[i]->add(kappa_yy_f);
+                _p_card_stiff[i]->add(kappa_zz_f);
 
                 // add the section properties to the card
                 _p_card_stiff[i]->add(*_thy_stiff_f[i]);
@@ -1054,38 +1067,37 @@ public:  // parametric constructor
         // create the output objects, one for each element
 
         _outputs.resize(_mesh->n_local_elem(), nullptr);
-        
-        for (int i = 0; i < _mesh->n_local_elem(); i++) {
-            MAST::StressStrainOutputBase *output = new MAST::StressStrainOutputBase;
-            output->set_discipline_and_system(*_discipline, *_structural_sys);
-            output->set_aggregation_coefficients(_p_val, 1.0, _vm_rho, _stress_limit);
-            output->set_skip_comm_sum(true);
-            _outputs[i] = output;
-        }
-        
-        _prev_elems.resize(comm().size() , 0);
-        
-        for (int j = 0; j<comm().size()-1 ; j++)
-            _prev_elems[j+1] += _prev_elems[j] + _mesh->n_elem_on_proc(j);
-        
-        
+
+       for (int i = 0; i < _mesh->n_local_elem(); i++) {
+           MAST::StressStrainOutputBase *output = new MAST::StressStrainOutputBase;
+           output->set_discipline_and_system(*_discipline, *_structural_sys);
+           output->set_aggregation_coefficients(_p_val, 1.0, _vm_rho, _stress_limit);
+           output->set_skip_comm_sum(true);
+           _outputs[i] = output;
+       }
+       _prev_elems.resize(comm().size() , 0);
+
+       for (int j = 0; j<comm().size()-1 ; j++)
+           _prev_elems[j+1] += _prev_elems[j] + _mesh->n_elem_on_proc(j);
+
+
         libMesh::MeshBase::const_element_iterator
-        e_it = _mesh->local_elements_begin(),
-        e_end = _mesh->local_elements_end();
-        
+                e_it = _mesh->local_elements_begin(),
+                e_end = _mesh->local_elements_end();
+
         int i = 0;
         for (; e_it != e_end; e_it++) {
             _outputs[i]->set_participating_elements({*e_it});
-            
+
             i += 1;
         }
-        
+
         if (_outputs.size() != _mesh->n_local_elem())
             libMesh::out << "_outputs is not the correct size " << std::endl;
-        
-        libmesh_assert_equal_to(_outputs.size(), _mesh->n_local_elem());
-        
-        
+
+            libmesh_assert_equal_to(_outputs.size(), _mesh->n_local_elem());
+
+
     }
 
     virtual void init_dvar(std::vector<Real>& x,
@@ -1338,11 +1350,13 @@ public:  // parametric constructor
         //////////////////////////////////////////////////////////////////////
 
         _nonlinear_assembly->set_discipline_and_system(*_discipline, *_structural_sys);
+        
         std::unique_ptr<libMesh::NumericVector<Real>>
-        localized_sol(_nonlinear_assembly->build_localized_vector(*_sys, steady_sol_wo_aero).release());
+                    localized_sol(_nonlinear_assembly->build_localized_vector(*_sys, steady_sol_wo_aero).release());
+        
         for (int i=0; i < _mesh->n_local_elem() ; i++){
             _nonlinear_assembly->calculate_output(*localized_sol, false, *_outputs[i]);
-        }
+        }   
         _nonlinear_assembly->clear_discipline_and_system();
 
 
@@ -1363,15 +1377,15 @@ public:  // parametric constructor
 
         // copy the element von Mises stress values as the functions
         for (unsigned int i = 0; i < _mesh->n_local_elem(); i++)
-            fvals[_n_eig + 1 + _prev_elems[_communicator.rank()] + i ] =
-            -1. + _outputs[i]->output_total()/_stress_limit;
-        
+                        fvals[_n_eig + 1 + _prev_elems[_communicator.rank()] + i ] =
+                                        -1. + _outputs[i]->output_total()/_stress_limit;
+                
         // Each processor only contributes to the local elements and all others remain zero.
         // We sum the stress constraints across procesors so that all processors have the
         // same stress constraint values. We do this before setting the eigenvlaue constraints
         // since those are set on all ranks.
-        _communicator.sum(fvals);
-
+           _communicator.sum(fvals);
+        
         //////////////////////////////////////////////////////////////////////
         // evaluate the eigenvalue constraint
         //////////////////////////////////////////////////////////////////////
@@ -1444,8 +1458,6 @@ public:  // parametric constructor
             // flutter sensitivity.
             libMesh::NumericVector<Real> &dXdV = _sys->add_vector("sol_V_sens");
 
-
-
             // no flutter solution
             dXdV.zero();
             
@@ -1454,48 +1466,35 @@ public:  // parametric constructor
             _modal_elem_ops->set_discipline_and_system(*_discipline, *_structural_sys);
             _nonlinear_assembly->set_discipline_and_system(*_discipline,*_structural_sys);
             _nonlinear_elem_ops->set_discipline_and_system(*_discipline,*_structural_sys);
-
+            
             std::vector<Real> grad_stress(grads.size(), 0.);
 
             // we are going to choose to use one parametric sensitivity at a time
             for (unsigned int i = 0; i < _n_vars; i++) {
                 libMesh::out << "design variable " << i << std::endl;
 
-                // sensitivity analysis
                 _sys->sensitivity_solve(*localized_sol,
                                         false,
                                         *_nonlinear_elem_ops,
                                         *_nonlinear_assembly,
                                         *_problem_parameters[i],
                                         true);
-
                 std::unique_ptr<libMesh::NumericVector<Real>>
-                localized_sol_sens(_nonlinear_assembly->build_localized_vector
-                                   (*_sys, _sys->get_sensitivity_solution(0)).release());
-
-
+                    localized_sol_sens(_nonlinear_assembly->build_localized_vector
+                                      (*_sys, _sys->get_sensitivity_solution(0)).release());
                 for (unsigned int j = 0 ; j < _mesh->n_local_elem(); j++){
-                    // evaluate sensitivity of the outputs
-
-                    _nonlinear_assembly->calculate_output_direct_sensitivity(*localized_sol,
-                                                                             false,
-                                                                             localized_sol_sens.get(),
-                                                                             false,
-                                                                             *(_problem_parameters[i]),
-                                                                             *(_outputs[j])  );
-
-                    // copy the sensitivity values in the output. This accounts for the
-                    // sensitivity of state wrt parameter. However, if a flutter root
-                    // was found, the state depends on velocity, which depends on the
-                    // parameter. Hence, the total sensitivity of stress constraint
-                    // would need to include the latter component, which was added
-                    // above.
-                    grad_stress[(i * _n_ineq) + (_prev_elems[_communicator.rank()]+j + _n_eig + 1 )] =
-                    _dv_scaling[i] / _stress_limit *
-                    _outputs[j]->output_sensitivity_total(*(_problem_parameters[i]));
+                     _nonlinear_assembly->calculate_output_direct_sensitivity(*localized_sol,
+                             false,
+                                                                              localized_sol_sens.get(),
+                                                                              false,
+                                                                              *(_problem_parameters[i]),
+                                                                              *(_outputs[j])  );
+                     grad_stress[(i * _n_ineq) + (_prev_elems[_communicator.rank()]+j + _n_eig + 1 )] =
+                                             _dv_scaling[i] / _stress_limit *
+                                                                 _outputs[j]->output_sensitivity_total(*(_problem_parameters[i]));
                 }
 
-
+                     
                 // if all eigenvalues are positive, calculate at the sensitivity of
                 // flutter velocity
                 // if no root was found, then set the sensitivity to a zero value
@@ -1521,17 +1520,12 @@ public:  // parametric constructor
                     }
                 }
             }
-
-            // Each processor only contributes to the local elements and all others remain zero.
-            // We sum the stress constraints across procesors so that all processors have the
-            // same stress constraint values. We do this before setting the eigenvlaue constraints
-            // since those are set on all ranks.
+            
             _communicator.sum(grad_stress);
-            
-            // now combine the values from stress and eigenvalue constraints
-            for (unsigned int i=0; i<grads.size(); i++)
-                grads[i] = grads[i] + grad_stress[i];
-            
+             // now combine the values from stress and eigenvalue constraints
+                          for (unsigned int i=0; i<grads.size(); i++)
+                                          grads[i] = grads[i] + grad_stress[i];
+
 
             _nonlinear_assembly->clear_discipline_and_system();
             _nonlinear_elem_ops->clear_discipline_and_system();
