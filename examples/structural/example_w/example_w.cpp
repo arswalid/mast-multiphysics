@@ -279,6 +279,9 @@ protected:      // protected member variables
     std::vector<unsigned int> _prev_elems;
     std::vector<MAST::StressStrainOutputBase *> _outputs;
     bool _if_neg_eig;
+    std::map<std::string, MAST::Parameter*>   _parameters;
+    std::set<MAST::FunctionBase*>             _field_functions;
+    
 public:  // parametric constructor
     StiffenedPlateThermallyStressedPistonTheorySizingOptimization(const libMesh::Parallel::Communicator &comm,
                                                                   MAST::Examples::GetPotWrapper& input) :
@@ -472,7 +475,23 @@ public:  // parametric constructor
     }
 
     ~StiffenedPlateThermallyStressedPistonTheorySizingOptimization() {
-
+        
+        {
+            std::set<MAST::FunctionBase*>::iterator
+            it   = _field_functions.begin(),
+            end  = _field_functions.end();
+            for ( ; it!=end; it++)
+                delete *it;
+        }
+        
+        {
+            std::map<std::string, MAST::Parameter*>::iterator
+            it   = _parameters.begin(),
+            end  = _parameters.end();
+            for ( ; it!=end; it++)
+                delete it->second;
+        }
+        
         if (_initialized) {
 
             delete _m_card;
@@ -515,6 +534,7 @@ public:  // parametric constructor
 
             delete _discipline;
             delete _structural_sys;
+            
 
 
             //delete _flutter_solver;
@@ -580,6 +600,7 @@ public:  // parametric constructor
                         end = _thz_station_parameters_stiff.end();
                 for (; it != end; it++) delete *it;
             }
+            
         }
     }
 
@@ -715,29 +736,23 @@ public:  // parametric constructor
         _discipline->add_dirichlet_bc(3, *_dirichlet_left);
 
         _discipline->init_system_dirichlet_bc(*_sys);
+
     }
 
     void _init_eq_sys() {
 
         // initialize the equation system
         _eq_sys->init();
-
         //The EigenSolver, definig which interface, i.e solver package to use.
         _sys->eigen_solver->set_position_of_spectrum(libMesh::LARGEST_MAGNITUDE);
-
         //sets the flag to exchange the A and B matrices for a generalized eigenvalue problem.
         //This is needed typically when the B matrix is not positive semi-definite.
         _sys->set_exchange_A_and_B(true);
-
         //sets the number of eigenvalues requested
         _sys->set_n_requested_eigenvalues(_n_eig);
-
         //Loop over the dofs on each processor to initialize the list of non-condensed dofs.
         //These are the dofs in the system that are not contained in global_dirichlet_dofs_set.
                _sys->initialize_condensed_dofs(*_discipline);
-
-
-
     }
 
     void _init_dv_vector() {
@@ -759,8 +774,6 @@ public:  // parametric constructor
 
         // design variables for the thickness values
         for (unsigned int i = 0; i < _n_vars; i++) {
-
-            //_dv_init[i] = _input("dv_init", "", th / th_u, i);
             _dv_low[i] = th_l / th_u;
             _dv_scaling[i] = th_u;
         }
@@ -768,7 +781,6 @@ public:  // parametric constructor
         for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
             _dv_init[i] = _input("dv_init", "", th / th_u, i);
         }
-
 
         for (unsigned int i = _n_dv_stations_x; i < _n_vars; i++) {
             _dv_init[i] = _input("dv_init", "", th_stiff / th_u, i);
@@ -782,7 +794,17 @@ public:  // parametric constructor
         _th_station_parameters_plate.resize(_n_dv_stations_x);
         _th_station_functions_plate.resize(_n_dv_stations_x);
 
+        Real
+        kappa_val = _input("kappa", "shear correction factor",  5./6.);
+        
+        MAST::Parameter
+        *kappa    = new MAST::Parameter("kappa", kappa_val);
+        MAST::ConstantFieldFunction
+        *kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
 
+        _parameters[kappa->name()]    = kappa;
+        _field_functions.insert(kappa_f);
+        
         for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
             std::ostringstream oss;
             oss << "h_" << i;
@@ -790,11 +812,18 @@ public:  // parametric constructor
             // now we need a parameter that defines the thickness at the
             // specified station and a constant function that defines the
             // field function at that location.
-            MAST::Parameter *h =
-                    new MAST::Parameter(oss.str(), _input("thickness", "", 0.002));
+            
+            
+                
+            MAST::Parameter
+                    *h        = new MAST::Parameter(oss.str(), _input("thickness", "", 0.002));
 
-            MAST::ConstantFieldFunction *h_f =
-                    new MAST::ConstantFieldFunction(oss.str(), *h);
+            MAST::ConstantFieldFunction
+                    *h_f      = new MAST::ConstantFieldFunction(oss.str(), *h);
+            
+            _parameters[    h->name()]    = h;
+            _field_functions.insert(h_f);
+            
 
             // add this to the thickness map
             _thy_station_vals.insert(std::pair<Real, MAST::FieldFunction<Real> *>
@@ -824,15 +853,6 @@ public:  // parametric constructor
         // add the section properties to the card
         _p_card_plate->add(*_th_plate_f);
         _p_card_plate->add(*_hoff_plate_f);
-
-        
-        Real
-                    kappa_val = _input("kappa", "shear correction factor",  5./6.);
-        MAST::Parameter
-            *kappa    = new MAST::Parameter("kappa", kappa_val);
-        MAST::ConstantFieldFunction
-            *kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
-        
         _p_card_plate->add(*kappa_f);
 
         // tell the section property about the material property
@@ -847,30 +867,35 @@ public:  // parametric constructor
     void _init_material() {
         // create the property functions and add them to the card
 
-
-        // create the property functions and add them to the
+        Real
+        Eval      = _input("E", "", 72.e9),
+        nu_val    = _input("nu", "", 0.33),
+        alpha_val = _input("alpha", "", 2.5e-5),
+        rho_val   = _input("rho", "", 2700.0);
+        
         MAST::Parameter
-                *E,
-                *alpha,
-                *nu,
-                *rho;
+        *E = new MAST::Parameter("E", Eval),
+        *nu = new MAST::Parameter("nu", nu_val),
+        *alpha = new MAST::Parameter("alpha", alpha_val),
+        *rho = new MAST::Parameter("rho", rho_val);
+
         MAST::ConstantFieldFunction
-                *E_f,
-                *nu_f,
-                *alpha_f,
-                *rho_f;
+        *E_f = new MAST::ConstantFieldFunction("E", *E),
+        *nu_f = new MAST::ConstantFieldFunction("nu", *nu),
+        *alpha_f = new MAST::ConstantFieldFunction("alpha_expansion", *alpha),
+        *rho_f = new MAST::ConstantFieldFunction("rho", *rho);
 
-
-        E = new MAST::Parameter("E", _input("E", "", 72.e9));
-        nu = new MAST::Parameter("nu", _input("nu", "", 0.33));
-        alpha = new MAST::Parameter("alpha", _input("alpha", "", 2.5e-5));
-        rho = new MAST::Parameter("rho", _input("rho", "", 2700.0));
-
-        E_f = new MAST::ConstantFieldFunction("E", *E);
-        nu_f = new MAST::ConstantFieldFunction("nu", *nu);
-        alpha_f = new MAST::ConstantFieldFunction("alpha_expansion", *alpha);
-        rho_f = new MAST::ConstantFieldFunction("rho", *rho);
-
+        
+        _parameters[   E->name()] =  E;
+        _parameters[   nu->name()] =  nu;
+        _parameters[alpha->name()] =  alpha;
+        _parameters[  rho->name()] =  rho;
+        
+        _field_functions.insert(E_f);
+        _field_functions.insert(nu_f);
+        _field_functions.insert(alpha_f);
+        _field_functions.insert(rho_f);
+        
         // create the material property card
         _m_card = new MAST::IsotropicMaterialPropertyCard;
 
@@ -893,6 +918,21 @@ public:  // parametric constructor
         _thz_stiff_f.resize(_n_stiff);
         _hyoff_stiff_f.resize(_n_stiff);
 
+        // addition of kappa to property card
+        MAST::Parameter
+        *kappa_yy = new MAST::Parameter("kappa_yy", 5./6.),
+        *kappa_zz = new MAST::Parameter("kappa_zz", 5./6.);
+        
+        MAST::ConstantFieldFunction
+        *kappa_yy_f  = new MAST::ConstantFieldFunction("Kappayy", *kappa_yy),
+        *kappa_zz_f  = new MAST::ConstantFieldFunction("Kappazz", *kappa_zz);
+        
+        _parameters[  kappa_yy->name()] = kappa_yy;
+        _parameters[  kappa_zz->name()] = kappa_zz;
+            
+        _field_functions.insert(kappa_yy_f);
+        _field_functions.insert(kappa_yy_f);
+        
         for (unsigned int i = 0; i < _n_stiff; i++) {
 
             // this map is used to store the thickness parameter along length
@@ -917,6 +957,12 @@ public:  // parametric constructor
                         *h_y_f = new MAST::ConstantFieldFunction(ossy.str(), *h_y),
                         *h_z_f = new MAST::ConstantFieldFunction(ossy.str(), *h_z);
 
+                _parameters[  h_y->name()] = h_y;
+                _parameters[  h_z->name()] = h_z;
+                    
+                _field_functions.insert(h_y_f);
+                _field_functions.insert(h_z_f);
+                
                 // add this to the thickness map
                 _thy_station_vals.insert(std::pair<Real, MAST::FieldFunction<Real> *>
                                                  (j * _dx, h_y_f));
@@ -954,23 +1000,16 @@ public:  // parametric constructor
                                                             -1.);
 
                 _p_card_stiff[i] = new MAST::Solid1DSectionElementPropertyCard;
-
-                MAST::Parameter kappa_yy("kappa_yy", 5./6.);
-                MAST::Parameter kappa_zz("kappa_zz", 5./6.);
-                
-                MAST::ConstantFieldFunction kappa_yy_f("Kappayy", kappa_yy);
-                MAST::ConstantFieldFunction kappa_zz_f("Kappazz", kappa_zz);
-                
-                _p_card_stiff[i]->add(kappa_yy_f);
-                _p_card_stiff[i]->add(kappa_zz_f);
-
+            
                 // add the section properties to the card
                 _p_card_stiff[i]->add(*_thy_stiff_f[i]);
                 _p_card_stiff[i]->add(*_thz_stiff_f[i]);
                 _p_card_stiff[i]->add(*_hyoff_stiff_f[i]);
                 _p_card_stiff[i]->add(*_thzoff_stiff_f);
                 _p_card_stiff[i]->y_vector() = orientation;
-
+                _p_card_stiff[i]->add(*kappa_yy_f);
+                _p_card_stiff[i]->add(*kappa_zz_f);
+            
                 // tell the section property about the material property
                 _p_card_stiff[i]->set_material(*_m_card);
 

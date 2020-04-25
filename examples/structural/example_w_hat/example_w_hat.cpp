@@ -286,8 +286,9 @@ protected:      // protected member variables
     // output quantity objects to evaluate stress
     std::vector<MAST::StressStrainOutputBase *> _outputs;
     std::vector<unsigned int> _prev_elems;
-
     bool _if_neg_eig;
+    std::map<std::string, MAST::Parameter*>   _parameters;
+    std::set<MAST::FunctionBase*>             _field_functions;
 public:  // parametric constructor
     StiffenedPlateThermallyStressedPistonTheorySizingOptimization(const libMesh::Parallel::Communicator &comm,
                                                                   MAST::Examples::GetPotWrapper& input) :
@@ -480,7 +481,22 @@ public:  // parametric constructor
     }
 
     ~StiffenedPlateThermallyStressedPistonTheorySizingOptimization() {
-
+        {
+            std::set<MAST::FunctionBase*>::iterator
+            it   = _field_functions.begin(),
+            end  = _field_functions.end();
+            for ( ; it!=end; it++)
+                delete *it;
+        }
+        
+        {
+            std::map<std::string, MAST::Parameter*>::iterator
+            it   = _parameters.begin(),
+            end  = _parameters.end();
+            for ( ; it!=end; it++)
+                delete it->second;
+        }
+        
         if (_initialized) {
 
             delete _m_card;
@@ -777,6 +793,17 @@ public:  // parametric constructor
         _th_station_parameters_plate.resize(_n_dv_stations_x);
         _th_station_functions_plate.resize(_n_dv_stations_x);
 
+        Real
+               kappa_val = _input("kappa", "shear correction factor",  5./6.);
+               
+               MAST::Parameter
+               *kappa    = new MAST::Parameter("kappa", kappa_val);
+               MAST::ConstantFieldFunction
+               *kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
+
+               _parameters[kappa->name()]    = kappa;
+               _field_functions.insert(kappa_f);
+        
         for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
             std::ostringstream oss;
             oss << "h_" << i;
@@ -816,15 +843,8 @@ public:  // parametric constructor
         // add the section properties to the card
         _p_card_plate->add(*_th_plate_f);
         _p_card_plate->add(*_hoff_plate_f);
-        
-        Real
-                    kappa_val = _input("kappa", "shear correction factor",  5./6.);
-        MAST::Parameter
-            *kappa    = new MAST::Parameter("kappa", kappa_val);
-        MAST::ConstantFieldFunction
-            *kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
-        
         _p_card_plate->add(*kappa_f);
+        
         // tell the section property about the material property
         _p_card_plate->set_material(*_m_card);
 
@@ -840,32 +860,34 @@ public:  // parametric constructor
 
 
         // create the property functions and add them to the
+        Real
+        Eval      = _input("E", "", 72.e9),
+        nu_val    = _input("nu", "", 0.33),
+        alpha_val = _input("alpha", "", 2.5e-5),
+        rho_val   = _input("rho", "", 2700.0);
+        
         MAST::Parameter
-                *E,
-                *alpha,
-                *nu,
-                *kappa,
-                *rho;
+        *E = new MAST::Parameter("E", Eval),
+        *nu = new MAST::Parameter("nu", nu_val),
+        *alpha = new MAST::Parameter("alpha", alpha_val),
+        *rho = new MAST::Parameter("rho", rho_val);
+
         MAST::ConstantFieldFunction
-                *E_f,
-                *nu_f,
-                *alpha_f,
-                *kappa_f,
-                *rho_f;
+        *E_f = new MAST::ConstantFieldFunction("E", *E),
+        *nu_f = new MAST::ConstantFieldFunction("nu", *nu),
+        *alpha_f = new MAST::ConstantFieldFunction("alpha_expansion", *alpha),
+        *rho_f = new MAST::ConstantFieldFunction("rho", *rho);
 
-
-        E = new MAST::Parameter("E", _input("E", "", 72.e9));
-        nu = new MAST::Parameter("nu", _input("nu", "", 0.33));
-        kappa = new MAST::Parameter("kappa", _input("kappa", "", 5. / 6.));
-        alpha = new MAST::Parameter("alpha", _input("alpha", "", 2.5e-5));
-        rho = new MAST::Parameter("rho", _input("rho", "", 2700.0));
-
-
-        E_f = new MAST::ConstantFieldFunction("E", *E);
-        nu_f = new MAST::ConstantFieldFunction("nu", *nu);
-        kappa_f = new MAST::ConstantFieldFunction("kappa", *kappa);
-        alpha_f = new MAST::ConstantFieldFunction("alpha_expansion", *alpha);
-        rho_f = new MAST::ConstantFieldFunction("rho", *rho);
+        
+        _parameters[   E->name()] =  E;
+        _parameters[   nu->name()] =  nu;
+        _parameters[alpha->name()] =  alpha;
+        _parameters[  rho->name()] =  rho;
+        
+        _field_functions.insert(E_f);
+        _field_functions.insert(nu_f);
+        _field_functions.insert(alpha_f);
+        _field_functions.insert(rho_f);
 
         // create the material property card
         _m_card = new MAST::IsotropicMaterialPropertyCard;
@@ -874,7 +896,6 @@ public:  // parametric constructor
         _m_card->add(*E_f);
         _m_card->add(*nu_f);
         _m_card->add(*rho_f);
-        _m_card->add(*kappa_f);
         _m_card->add(*alpha_f);
 
     }
@@ -893,7 +914,17 @@ public:  // parametric constructor
         _th_stiff_f.resize(_n_stiff);
         _hoff_stiff_f.resize(_n_stiff);
 
+        Real
+        kappa_val = _input("kappa", "shear correction factor",  5./6.);
+        
+        MAST::Parameter
+        *kappa    = new MAST::Parameter("kappa", kappa_val);
+        MAST::ConstantFieldFunction
+        *kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
 
+        _parameters[kappa->name()]    = kappa;
+        _field_functions.insert(kappa_f);
+        
         for (unsigned int i = 0; i < _n_stiff; i++) {
 
             // this map is used to store the thickness parameter along length
@@ -941,17 +972,8 @@ public:  // parametric constructor
             // add the section properties to the card
             _p_card_stiff[i]->add(*_th_stiff_f[i]);
             _p_card_stiff[i]->add(*_hoff_stiff_f[i]);
+            _p_card_stiff[i]->add(*kappa_f);
             
-
-
-             Real
-                         kappa_val = _input("kappa", "shear correction factor",  5./6.);
-             MAST::Parameter
-                 *kappa    = new MAST::Parameter("kappa", kappa_val);
-             MAST::ConstantFieldFunction
-                 *kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
-             
-             _p_card_stiff[i]->add(*kappa_f);
             // tell the section property about the material property
             _p_card_stiff[i]->set_material(*_m_card);
 
