@@ -1964,11 +1964,20 @@ public:  // parametric constructor
                         _obj._sys->time += dt;
 //                         write the current solution to the exodus file for
 //                         visualization
-                        writer->write_timestep("sol_continuation_solver.exo",
-                                               *_obj._eq_sys,
-                                                 i+1,
-                                                 i+1);//,
-                                              // _obj._sys->time);
+                        try
+                        {
+                            writer->write_timestep("sol_continuation_solver.exo",
+                             *_obj._eq_sys,
+                               i+1,
+                               i+1);//,
+                            // _obj._sys->time);
+                        }
+                        catch (const std::exception& e) { // caught by reference to base
+                            libMesh::out << " a standard exception was caught, with message '"
+                                      << e.what() << "'\n";
+                            libMesh::out << " continue ... " << std::endl;
+                        }
+                        
 
 
                         // if a negative eigenvalue is detected
