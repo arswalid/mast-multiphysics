@@ -64,7 +64,8 @@ protected:
                            std::map<std::pair<unsigned int, unsigned int>, libMesh::Elem*>& node_pair_to_elem_map,
                            std::vector<libMesh::Elem*>& elems,
                            std::map<const libMesh::Node*, libMesh::Node*>& node_map,
-                           libMesh::MeshBase& mesh);
+                           libMesh::MeshBase& mesh,
+                           int sub_id);
     
     void
     add_elem_to_map(std::map<std::pair<unsigned int, unsigned int>, libMesh::Elem*>& node_pair_to_elem_map,

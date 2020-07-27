@@ -52,7 +52,11 @@ MAST::FoamMesh::init(const unsigned int divs_in_x,
     
     std::map<std::pair<unsigned int, unsigned int>, libMesh::Elem *> node_pair_to_elem_map;
     std::map<const libMesh::Node *, libMesh::Node *> ref_to_new_node_map;
-    
+
+
+    int n_subs_repeated = 14;
+    int* ptr_i = &n_subs_repeated;
+
     for (; it != end; it++) {
         
         libMesh::Elem *e = *it;
@@ -68,7 +72,7 @@ MAST::FoamMesh::init(const unsigned int divs_in_x,
             libMesh::Elem *edge = libMesh::Elem::build(libMesh::EDGE2).release();
             edge->set_node(0) = center_node;
             edge->set_node(1) = nd;
-            edge->subdomain_id() = 3;
+            edge->subdomain_id() = 2+i;
             elems.push_back(edge);
             add_elem_to_map(node_pair_to_elem_map, edge);
         }
@@ -102,13 +106,18 @@ MAST::FoamMesh::init(const unsigned int divs_in_x,
          *    o--------------o--------------o
          *    0              8              1
          */
-        process_elems_in_plane(e, right_plane, node_pair_to_elem_map, elems, ref_to_new_node_map, mesh);
-        process_elems_in_plane(e, left_plane, node_pair_to_elem_map, elems, ref_to_new_node_map, mesh);
-        process_elems_in_plane(e, front_plane, node_pair_to_elem_map, elems, ref_to_new_node_map, mesh);
-        process_elems_in_plane(e, rear_plane, node_pair_to_elem_map, elems, ref_to_new_node_map, mesh);
-        process_elems_in_plane(e, top_plane, node_pair_to_elem_map, elems, ref_to_new_node_map, mesh);
-        process_elems_in_plane(e, bottom_plane, node_pair_to_elem_map, elems, ref_to_new_node_map, mesh);
-        
+
+
+
+
+        process_elems_in_plane(e, right_plane, node_pair_to_elem_map, elems, ref_to_new_node_map, mesh,14);
+        process_elems_in_plane(e, left_plane, node_pair_to_elem_map, elems, ref_to_new_node_map, mesh,14);
+        process_elems_in_plane(e, front_plane, node_pair_to_elem_map, elems, ref_to_new_node_map, mesh,15);
+        process_elems_in_plane(e, rear_plane, node_pair_to_elem_map, elems, ref_to_new_node_map, mesh,15);
+        process_elems_in_plane(e, top_plane, node_pair_to_elem_map, elems, ref_to_new_node_map, mesh,16);
+        process_elems_in_plane(e, bottom_plane, node_pair_to_elem_map, elems, ref_to_new_node_map, mesh,16);
+
+
         // if the element has no neighbor on the bottom and top faces, then
         // we need to add shell elements at these locations
         /*
@@ -250,7 +259,8 @@ MAST::FoamMesh::process_elems_in_plane
   std::map<std::pair<unsigned int, unsigned int>, libMesh::Elem*>& node_pair_to_elem_map,
   std::vector<libMesh::Elem*>& elems,
   std::map<const libMesh::Node*, libMesh::Node*>& node_map,
-  libMesh::MeshBase& mesh) {
+  libMesh::MeshBase& mesh,
+  int sub_id) {
     
     libMesh::Node *node1, *node2;
     for (unsigned int i=0; i<node_ids_in_plane.size(); i++) {
@@ -263,9 +273,12 @@ MAST::FoamMesh::process_elems_in_plane
             libMesh::Elem *edge = libMesh::Elem::build(libMesh::EDGE2).release();
             edge->set_node(0) = node1;
             edge->set_node(1) = node2;
-            edge->subdomain_id() = 3;
+            edge->subdomain_id() = sub_id;
             elems.push_back(edge);
+
             add_elem_to_map(node_pair_to_elem_map, edge);
+
+
         }
     }
 }

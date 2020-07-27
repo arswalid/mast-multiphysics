@@ -612,8 +612,8 @@ public:  // parametric constructor
         _mesh = new libMesh::SerialMesh(this->comm());
 
         // length of domain
-         _length = _input("length", " ", 0.50);
-         _width = _input("width", " ", 0.25);
+         _length = _input("length", " ", 0.3);
+         _width = _input("width", " ", 0.3);
 
         // identify the element type from the input file or from the order
         // of the element
@@ -630,13 +630,15 @@ public:  // parametric constructor
                             _n_divs_between_stiff,       // n_y_divs_between_stiffeners
                             _length,
                             _width,
-                            _input("skin_dip_h_by_w","",0.00),     // skin_dip_amplitude_by_panel_w,
+                            _input("skin_dip_h_by_w","",0.016),     // skin_dip_amplitude_by_panel_w,
                             _input("hat_dip_h_by_w","",-0.00),    // hat_dip_amplitude_by_panel_w,
                             .2,       // stiff_w_by_panel_w
                             .5,       // hat_w_by_stiff_w
                             .05,      // hat_h_by_panel_w
                             *_mesh,
-                            e_type);
+                            e_type,
+                            0.1,
+                            0.15);
 
 
         libMesh::out
@@ -1167,6 +1169,11 @@ public:  // parametric constructor
         // print the values of all design variables
         libMesh::out << "//////////////////////////////////////////////////////////////////////"<< std::endl
                      << " New Eval " << std::endl;
+
+        for (unsigned int i = 0; i < _n_vars; i++)
+            libMesh::out << "dv_scaling[ " << std::setw(10) << i << " ] = "
+                    << std::setw(20) <<_dv_scaling[i];
+
         for (unsigned int i = 0; i < _n_vars; i++)
             libMesh::out
                     << "th     [ " << std::setw(10) << i << " ] = "
@@ -1951,7 +1958,12 @@ public:  // parametric constructor
                             (*_obj._temp)() = max_temp;
                             break;
                         }
-
+                        if (  (*_obj._temp)() < 0.0 )   {
+                            _obj._if_neg_eig = true;
+                            libMesh::out << " Continuation solver diverged" << std::endl;
+                            (*_obj._temp)() = max_temp;
+                            break;
+                        }
                         // if the temperature given by the solver is bigger than tmax
                         // go back to tmax and solve the system one more time and exit
                         if ((*_obj._temp)() > max_temp) {

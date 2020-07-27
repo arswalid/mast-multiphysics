@@ -68,7 +68,7 @@ int main(int argc, const char** argv)
     MAST::Examples::GetPotWrapper input(argc, argv, "input");
 
 
-    bool if_vk = input("nonlinear",  "account for geometric nonlinearities ", false);
+    bool if_vk = input("if_vk",  "account for geometric nonlinearities ", false);
     bool if_continuation_solver = input("continuation_solver",  "use the continuation solver  ", false);
     int n_eig  = input("n_eig",  "number of eigeinvalues", 20);
     int nl_steps = input("nl_steps",  "number of steps in nonlinear solver", 10);
@@ -81,11 +81,11 @@ int main(int argc, const char** argv)
 
 
 
-    Real    length = input("length",  "length of the structure ", 1.),
+    Real    length = input("length",  "length of the structure ", 2.),
             width  = input("width",    "width of the structure ", 1.),
             height = input("height",  "height of the structure ", 1.);
 
-    unsigned int n_divs_x      = input("n_divs_x",  "number of unit cells in the x dir", 1),
+    unsigned int n_divs_x      = input("n_divs_x",  "number of unit cells in the x dir", 2),
                  n_divs_y      = input("n_divs_y",  "number of unit cells in the y dir", 1),
                 refinement_lvl = input("refinement_lvl",  "refinement of the mesh (n_elems^refinement_lvl)", 0);
 
@@ -264,31 +264,128 @@ int main(int argc, const char** argv)
     MAST::ConstantFieldFunction hyoff_f("hy_off", zero);
     MAST::ConstantFieldFunction hzoff_f("hz_off", zero);
 
-    MAST::Solid1DSectionElementPropertyCard section_beam;
-    section_beam.add(thy_f);
-    section_beam.add(thz_f);
-    section_beam.add(hyoff_f);
-    section_beam.add(hzoff_f);
-    section_beam.add(kappa_yy_f);
-    section_beam.add(kappa_zz_f);
-    if (if_vk) section_beam.set_strain(MAST::NONLINEAR_STRAIN);
+
+    std::vector<MAST::Solid1DSectionElementPropertyCard *> section_beam(mesh.n_subdomains() - 2, nullptr);
+
+
+    libMesh::MeshBase::const_element_iterator
+            el_it = mesh.elements_begin(),
+            el_end = mesh.elements_end();
+
+    RealVectorX direction = RealVectorX::Zero(3),
+            A= RealVectorX::Zero(3),
+            B= RealVectorX::Zero(3),
+            normal= RealVectorX::Zero(3);
+    Real k = 0;
+    unsigned int ind = 0;
+
+    for (; el_it != el_end; el_it++) {
+        libMesh::Elem *old_elem = *el_it;
+        // add boundary condition tags for the panel boundary
+        if (old_elem->subdomain_id() > 1){
+
+            ind = old_elem->subdomain_id() - 2;
+
+            if (section_beam[ind] == nullptr) {
+
+                if (old_elem->subdomain_id() < 14 ) {
+                    section_beam[ind] = new MAST::Solid1DSectionElementPropertyCard;
+
+                    section_beam[ind]->add(thy_f);
+                    section_beam[ind]->add(thz_f);
+                    section_beam[ind]->add(hyoff_f);
+                    section_beam[ind]->add(hzoff_f);
+                    section_beam[ind]->add(kappa_yy_f);
+                    section_beam[ind]->add(kappa_zz_f);
+                    if (if_vk) section_beam[ind]->set_strain(MAST::NONLINEAR_STRAIN);
+
+                    A(0) = old_elem->point(0)(0);
+                    A(1) = old_elem->point(0)(1);
+                    A(2) = old_elem->point(0)(2);
+
+                    B(0) = old_elem->point(1)(0);
+                    B(1) = old_elem->point(1)(1);
+                    B(2) = old_elem->point(1)(2);
+
+                    direction = B - A;
+                    direction /= direction.norm();
+
+                    k = -(direction(0) * A(0) + direction(1) * A(1) + direction(2) * A(2)) /
+                        (pow(direction(0), 2) + pow(direction(1), 2) + pow(direction(2), 2));
+
+                    normal(0) = direction(0) * k + A(0);
+                    normal(1) = direction(1) * k + A(1);
+                    normal(2) = direction(2) * k + A(2);
+
+                    if (normal.norm() < 1.e-8)
+                        libmesh_error();
+
+                    normal /= normal.norm();
+
+                    section_beam[ind]->y_vector() = normal;
+
+                    // Attach material to the card.
+                    section_beam[ind]->set_material(material);
+
+                    // Initialize the section and specify the subdomain in the mesh that it applies to.
+                    section_beam[ind]->init();
+
+                    discipline.set_property_for_subdomain(old_elem->subdomain_id(), *section_beam[ind]);
+                }
+                else if (old_elem->subdomain_id() >= 14){
+                    section_beam[ind] = new MAST::Solid1DSectionElementPropertyCard;
+
+                    section_beam[ind]->add(thy_f);
+                    section_beam[ind]->add(thz_f);
+                    section_beam[ind]->add(hyoff_f);
+                    section_beam[ind]->add(hzoff_f);
+                    section_beam[ind]->add(kappa_yy_f);
+                    section_beam[ind]->add(kappa_zz_f);
+                    if (if_vk) section_beam[ind]->set_strain(MAST::NONLINEAR_STRAIN);
+
+                    if (old_elem->subdomain_id() == 14) {
+                        normal(0) = 1;
+                        normal(1) = 0;
+                        normal(2) = 0;
+                    }
+                    else if (old_elem->subdomain_id() == 15) {
+                        normal(0) = 0;
+                        normal(1) = 1;
+                        normal(2) = 0;
+                    }
+                    else if (old_elem->subdomain_id() == 16) {
+                        normal(0) = 0;
+                        normal(1) = 0;
+                        normal(2) = 1;
+                    }
+                    else {libmesh_error();}
+
+                    section_beam[ind]->y_vector() = normal;
+
+                    // Attach material to the card.
+                    section_beam[ind]->set_material(material);
+
+                    // Initialize the section and specify the subdomain in the mesh that it applies to.
+                    section_beam[ind]->init();
+
+                    discipline.set_property_for_subdomain(old_elem->subdomain_id(), *section_beam[ind]);
+
+                }
+            }
+        }
+
+    }
+
+    libmesh_assert_equal_to(section_beam.size(), mesh.n_subdomains() - 2);
 
     // Specify a section orientation point and add it to the section.
-    RealVectorX orientation = RealVectorX::Zero(3);
-    orientation(0) = 0.0;
-    orientation(1) = 1;
-    orientation(2) = 0.0;
+//    RealVectorX orientation = RealVectorX::Zero(3);
+//    orientation(0) = 0.0;
+//    orientation(1) = 1;
+//    orientation(2) = 0.0;
 
-    orientation /= orientation.norm();
-    section_beam.y_vector() = orientation;
+//    orientation /= orientation.norm();
 
-    // Attach material to the card.
-    section_beam.set_material(material);
-
-    // Initialize the section and specify the subdomain in the mesh that it applies to.
-    section_beam.init();
-
-    discipline.set_property_for_subdomain(3, section_beam);
 
     ////////////////////   solving the problem       ////////////////////////
     // Create nonlinear assembly object and set the discipline and

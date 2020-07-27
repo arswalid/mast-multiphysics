@@ -58,7 +58,9 @@ namespace MAST {
                    const Real hat_w_by_panel_w,
                    const Real hat_h_by_panel_w,
                    libMesh::MeshBase& mesh,
-                   libMesh::ElemType t);
+                   libMesh::ElemType t,
+                   Real per1,
+                   Real per2);
         
     protected:
         
@@ -78,7 +80,9 @@ namespace MAST {
                            const Real stiff_w_by_panel_w,
                            const Real hat_w_by_stiff_w,
                            const Real skin_dip_amplitude_by_panel_w,
-                           const libMesh::ElemType t);
+                           const libMesh::ElemType t,
+                           Real per1,
+                           Real per2);
         
         
         void _create_hat_stiff(libMesh::MeshBase& stiff,
