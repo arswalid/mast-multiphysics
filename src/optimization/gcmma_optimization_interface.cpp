@@ -282,6 +282,19 @@ MAST::GCMMAOptimizationInterface::optimize() {
                 for (unsigned int i=0; i<XMMA.size(); i++)
                     XMMA_new[i] = XOLD1[i] + frac*(XMMA[i]-XOLD1[i]);
 
+                for (unsigned int i = 0; i<XMMA.size(); i++)
+                    libMesh::out << "XMMA[ " << std::setw(10) << i << " ] = "
+                                 << std::setw(20) <<XMMA[i];
+
+                for (unsigned int i = 0; i<XOLD1.size(); i++)
+                    libMesh::out << "XOLD1[ " << std::setw(10) << i << " ] = "
+                                 << std::setw(20) <<XOLD1[i];
+
+                for (unsigned int i = 0; i<XMMA_new.size(); i++)
+                    libMesh::out << "XMMA_new[ " << std::setw(10) << i << " ] = "
+                                 << std::setw(20) <<XMMA_new[i];
+
+
                 _feval->_evaluate_wrapper(XMMA_new,
                                           F0NEW, false, DF0DX,
                                           FNEW, eval_grads, DFDX);

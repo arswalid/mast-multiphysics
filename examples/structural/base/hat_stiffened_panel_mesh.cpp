@@ -46,7 +46,9 @@ MAST::HatStiffenedPanelMesh::init(const unsigned int n_stiff,
                                   const Real hat_w_by_stiff_w,
                                   const Real hat_h_by_panel_w,
                                   libMesh::MeshBase& mesh,
-                                  libMesh::ElemType t) {
+                                  libMesh::ElemType t,
+                                  Real per1,
+                                  Real per2) {
     
     libmesh_assert_less(stiff_w_by_panel_w*n_stiff, 1.);
     
@@ -72,7 +74,9 @@ MAST::HatStiffenedPanelMesh::init(const unsigned int n_stiff,
                   stiff_w_by_panel_w,
                   hat_w_by_stiff_w,
                   skin_dip_amplitude_by_panel_w,
-                  t);
+                  t,
+                  per1,
+                  per2);
     
     // use subdomain id for panel as 0
     _combine_mesh(mesh, panel, MAST::HatStiffenedPanelMesh::PANEL, 0., 0,
@@ -126,7 +130,9 @@ _create_panel(libMesh::MeshBase& panel,
               const Real stiff_w_by_panel_w,
               const Real hat_w_by_stiff_w,
               const Real skin_dip_amplitude_by_panel_w,
-              const libMesh::ElemType t) {
+              const libMesh::ElemType t,
+              Real per1,
+              Real per2) {
     
     // the geometry numbers
     const Real
@@ -201,8 +207,20 @@ _create_panel(libMesh::MeshBase& panel,
     
     libMesh::Point
     p;
-    
-    
+
+    Real x1= per1*length,
+         x2= per2*length,
+         x3= (1 - per2)*length,
+         x4= (1 - per1)*length,
+         func = 0,
+         a=0,b=0,c=0,d=0;
+
+    b = (-(pow(x1,2)) - (1-pow(x2,2))*x1/x2 )/ (1-(x1/x2));
+    a = (1-b-pow(x2,2))/x2;
+
+    d = (-(pow(x4,2)) - (1-pow(x3,2))*x4/x3 )/ (1-(x4/x3));
+    c = (1-d-pow(x3,2))/x3;
+
     for ( ; n_it != n_end; n_it++) {
         
         libMesh::Node& n = **n_it;
@@ -217,9 +235,24 @@ _create_panel(libMesh::MeshBase& panel,
             y0 = (*y_vals[2*i+1])();// + (w_stiff-w_hat)/2.;
             y1 = (*y_vals[2*i+2])();// - (w_stiff-w_hat)/2.;
             
-            if ((y >= y0) && (y <= y1))
-                n(2) += skin_dip_amplitude_by_panel_w * width * 0.5 *
-                (1.-cos((y-y0)/(y1-y0)*2*pi));
+            if ((y >= y0) && (y <= y1)){
+                if (n(0) >= x1 && n(0) < x3){
+                    if (n(0) <= x2)
+                        func = pow(n(0),2) + a*n(0) + b;
+                    else
+                        func = 1.;
+                }
+                else if (n(0) >= x3) {
+                    if (n(0) <= x4)
+                        func = pow(n(0),2) + c * n(0) + d;
+                    else
+                        func = 0;
+                }
+
+                n(2) += func*(skin_dip_amplitude_by_panel_w * width * 0.5 *
+                (1.-cos((y-y0)/(y1-y0)*2*pi)));
+
+            }
         }
     }
     
@@ -247,8 +280,8 @@ MAST::HatStiffenedPanelMesh::_create_hat_stiff(libMesh::MeshBase& stiff,
     
     // the geometry numbers
     const Real
-    w_stiff = stiff_w_by_panel_w * width,
-    hat_y0  = 0.5 * stiff_w_by_panel_w*(1.-hat_w_by_stiff_w) * width,
+    w_stiff = stiff_w_by_panel_w * width,        // width of the stiffener
+    hat_y0  = 0.5 * stiff_w_by_panel_w*(1.-hat_w_by_stiff_w) * width,     //
     hat_y1  = w_stiff - hat_y0,
     hat_z   = hat_h_by_panel_w * width;
     
