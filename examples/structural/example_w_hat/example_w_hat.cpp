@@ -236,6 +236,7 @@ protected:      // protected member variables
     libMesh::FEType  _fetype;
     Real _dx;
     bool _if_vk;
+    bool _if_analysis;
     MAST::Parameter* _zero;
     //MAST::ConstantFieldFunction* _thzoff_stiff_f;
     std::map<Real, MAST::FieldFunction<Real> *> _thy_station_vals;
@@ -372,7 +373,8 @@ public:  // parametric constructor
             _vm_rho(0.),
             _if_continuation_solver(false),
             _stress_elem(nullptr),
-            _if_neg_eig(false)
+            _if_neg_eig(false),
+            _if_analysis(false)
     {
 
 
@@ -391,6 +393,9 @@ public:  // parametric constructor
         libmesh_assert(!_initialized);
 
         _if_vk = _input("nonlinear", "linear or nonlinear", false);
+        _if_analysis = _input("if_analysis", "analysis only", false);
+
+
         _if_continuation_solver = _input("if_continuation_solver", "continuation solver on/off flag", false);
 
         // number of load steps
@@ -637,8 +642,8 @@ public:  // parametric constructor
                             .05,      // hat_h_by_panel_w
                             *_mesh,
                             e_type,
-                            0.1,
-                            0.15);
+                        _input("per1","",.0),
+                        _input("per2","",.0));
 
 
         libMesh::out
@@ -1170,9 +1175,9 @@ public:  // parametric constructor
         libMesh::out << "//////////////////////////////////////////////////////////////////////"<< std::endl
                      << " New Eval " << std::endl;
 
-        for (unsigned int i = 0; i < _n_vars; i++)
-            libMesh::out << "dv_scaling[ " << std::setw(10) << i << " ] = "
-                    << std::setw(20) <<_dv_scaling[i];
+//        for (unsigned int i = 0; i < _n_vars; i++)
+//            libMesh::out << "dv_scaling[ " << std::setw(10) << i << " ] = "
+//                    << std::setw(20) <<_dv_scaling[i] << std::endl;
 
         for (unsigned int i = 0; i < _n_vars; i++)
             libMesh::out
@@ -1219,6 +1224,8 @@ public:  // parametric constructor
         libMesh::NumericVector<Real> & steady_sol_wo_aero = _sys->add_vector("steady_sol_wo_aero");
         steady_sol_wo_aero = *_sys->solution;
 
+
+        
         // now that we have the solution under the influence of thermal loads,
         // we will use a small number of load steps to get to the steady-state
         // solution
@@ -1351,6 +1358,9 @@ public:  // parametric constructor
             _stress_assembly->clear_discipline_and_system();
         }
 
+        // once the stress and displacement are plotted stop the exec for analysis
+        if (_if_analysis)
+            libmesh_error();
 
         //////////////////////////////////////////////////////////////////////
         // now calculate the stress output based on the velocity output
@@ -1445,6 +1455,7 @@ public:  // parametric constructor
 
 
         if (if_sens) {
+            START_LOG("sensitivity calculation()","sensitivity calculation")
 
             libMesh::out << "** Sensitivity analysis **" << std::endl;
             // first initialize the gradient vector to zero
@@ -1541,6 +1552,7 @@ public:  // parametric constructor
             _modal_elem_ops->clear_discipline_and_system();
 
             libMesh::out << "** sensitivity analysis DONE **" << std::endl;
+            STOP_LOG("sensitivity calculation()","sensitivity calculation")
 
         }
     }
@@ -1958,12 +1970,23 @@ public:  // parametric constructor
                             (*_obj._temp)() = max_temp;
                             break;
                         }
+
+                        // if cont solver went wrong direction stop
                         if (  (*_obj._temp)() < 0.0 )   {
                             _obj._if_neg_eig = true;
                             libMesh::out << " Continuation solver diverged" << std::endl;
                             (*_obj._temp)() = max_temp;
                             break;
                         }
+
+                        // max iters in cont solver is 500
+                        if (  i > 1000 )   {
+                            _obj._if_neg_eig = true;
+                            libMesh::out << " Continuation solver reached max iters" << std::endl;
+                            (*_obj._temp)() = max_temp;
+                            break;
+                        }
+
                         // if the temperature given by the solver is bigger than tmax
                         // go back to tmax and solve the system one more time and exit
                         if ((*_obj._temp)() > max_temp) {
@@ -2055,7 +2078,7 @@ int main(int argc, char* argv[]) {
     
     
     unsigned int
-            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 15);
+            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 2);
 
     Real
             constr_penalty         = _input("constraint_penalty", "constraint penalty in GCMMA", 50.),

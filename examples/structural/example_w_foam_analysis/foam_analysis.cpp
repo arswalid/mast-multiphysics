@@ -58,6 +58,8 @@
 
 int main(int argc, const char** argv)
 {
+
+
     // BEGIN_TRANSLATE Extension of bar
     //
     // This example solves an axial bar extension problem.
@@ -88,7 +90,7 @@ int main(int argc, const char** argv)
     unsigned int n_divs_x      = input("n_divs_x",  "number of unit cells in the x dir", 2),
                  n_divs_y      = input("n_divs_y",  "number of unit cells in the y dir", 1),
                 refinement_lvl = input("refinement_lvl",  "refinement of the mesh (n_elems^refinement_lvl)", 0);
-
+    START_LOG("foam_mesh()","FoamMesh")
     MAST::FoamMesh foam_mesh;
     foam_mesh.init(n_divs_x,
                    n_divs_y,
@@ -97,7 +99,7 @@ int main(int argc, const char** argv)
                    height,
                    mesh,
                    refinement_lvl);
-
+    STOP_LOG("foam_mesh()","FoamMesh")
     mesh.print_info();
 //    mesh.boundary_info->print_info();
 

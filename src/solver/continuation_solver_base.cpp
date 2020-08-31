@@ -32,6 +32,7 @@
 
 // PETSc includes
 #include <petscmat.h>
+#include <libmesh/libmesh_logging.h>
 
 
 MAST::ContinuationSolverBase::ContinuationSolverBase():
@@ -93,7 +94,9 @@ void
 MAST::ContinuationSolverBase::solve()  {
     
     libmesh_assert(_initialized);
-    
+
+    START_LOG("solve()","ContinuationSolverBase")
+
     unsigned int
     iter    = 0;
     
@@ -177,7 +180,8 @@ MAST::ContinuationSolverBase::solve()  {
             << std::setw(15) << arc_length << std::endl;
         }
     }
-    
+
+    STOP_LOG("solve()","ContinuationSolverBase")
 }
 
 

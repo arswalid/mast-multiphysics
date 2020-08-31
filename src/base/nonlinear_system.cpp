@@ -565,6 +565,7 @@ eigenproblem_sensitivity_solve (MAST::AssemblyElemOperations&    elem_ops,
     
     // make sure that eigensolution is already available
     libmesh_assert(_n_converged_eigenpairs);
+    START_LOG("eigenproblem_sensitivity_solve()","NonlinearSystem")
 
     assembly.set_elem_operation_object(elem_ops);
     
@@ -707,6 +708,8 @@ eigenproblem_sensitivity_solve (MAST::AssemblyElemOperations&    elem_ops,
 
 
     assembly.clear_elem_operation_object();
+
+    STOP_LOG("eigenproblem_sensitivity_solve()","NonlinearSystem")
 }
 
 

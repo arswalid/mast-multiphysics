@@ -212,14 +212,29 @@ _create_panel(libMesh::MeshBase& panel,
          x2= per2*length,
          x3= (1 - per2)*length,
          x4= (1 - per1)*length,
-         func = 0,
-         a=0,b=0,c=0,d=0;
+         func = 0;
 
-    b = (-(pow(x1,2)) - (1-pow(x2,2))*x1/x2 )/ (1-(x1/x2));
-    a = (1-b-pow(x2,2))/x2;
+    //solve system of equation for equations of function
+    Matrix4f A,A_;
+    Vector4f b,b_,X,X_;
+    A << 3*pow(x1,2), 2*x1, 1,  0,
+         3*pow(x2,2), 2*x2, 1,  0,
+         pow(x1,3),   pow(x1,2), x1, 1,
+         pow(x2,3),   pow(x2,2), x2, 1;
 
-    d = (-(pow(x4,2)) - (1-pow(x3,2))*x4/x3 )/ (1-(x4/x3));
-    c = (1-d-pow(x3,2))/x3;
+    b << 0,0,0,1;
+
+    X = A.colPivHouseholderQr().solve(b);
+
+    A_ << 3*pow(x3,2), 2*x3, 1,  0,
+          3*pow(x4,2), 2*x4, 1,  0,
+          pow(x3,3),   pow(x3,2), x3, 1,
+          pow(x4,3),   pow(x4,2), x4, 1;
+    b_ << 0,0,1,0;
+
+    X_ = A_.colPivHouseholderQr().solve(b_);
+
+
 
     for ( ; n_it != n_end; n_it++) {
         
@@ -236,21 +251,25 @@ _create_panel(libMesh::MeshBase& panel,
             y1 = (*y_vals[2*i+2])();// - (w_stiff-w_hat)/2.;
             
             if ((y >= y0) && (y <= y1)){
-                if (n(0) >= x1 && n(0) < x3){
-                    if (n(0) <= x2)
-                        func = pow(n(0),2) + a*n(0) + b;
-                    else
-                        func = 1.;
-                }
-                else if (n(0) >= x3) {
-                    if (n(0) <= x4)
-                        func = pow(n(0),2) + c * n(0) + d;
-                    else
-                        func = 0;
-                }
+                if (x1 != x2) {
+                    if (n(0) >= x1 && n(0) < x3) {
+                        if (n(0) <= x2)
+                            func = X[0] * pow(n(0), 3) + X[1] * pow(n(0), 2) + X[2] * n(0) + X[3];
+                        else
+                            func = 1.;
+                    } else if (n(0) >= x3) {
+                        if (n(0) <= x4)
+                            func = X_[0] * pow(n(0), 3) + X_[1] * pow(n(0), 2) + X_[2] * n(0) + X_[3];
+                        else
+                            func = 0;
+                    }
 
-                n(2) += func*(skin_dip_amplitude_by_panel_w * width * 0.5 *
-                (1.-cos((y-y0)/(y1-y0)*2*pi)));
+                    n(2) += func * (skin_dip_amplitude_by_panel_w * width * 0.5 *
+                                    (1. - cos((y - y0) / (y1 - y0) * 2 * pi)));
+                }
+                else
+                    n(2) +=  (skin_dip_amplitude_by_panel_w * width * 0.5 *
+                                    (1. - cos((y - y0) / (y1 - y0) * 2 * pi)));
 
             }
         }

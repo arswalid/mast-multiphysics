@@ -19,6 +19,7 @@
 
 
 // MAST includes
+#include <libmesh/libmesh_logging.h>
 #include "solver/pseudo_arclength_continuation_solver.h"
 #include "base/assembly_base.h"
 #include "base/nonlinear_system.h"
@@ -88,6 +89,9 @@ _solve_NR_iterate(libMesh::NumericVector<Real>       &X,
 
     libmesh_assert(_initialized);
 
+    START_LOG("_solve_NR_iterate()","PseudoArclengthContinuationSolver")
+
+
     std::unique_ptr<libMesh::NumericVector<Real>>
     f(X.zero_clone().release()),
     dfdp(X.zero_clone().release()),
@@ -135,7 +139,8 @@ _solve_NR_iterate(libMesh::NumericVector<Real>       &X,
     p() += dp;
     X.add(1., *dX);
     X.close();
-    
+
+    STOP_LOG("_solve_NR_iterate()","PseudoArclengthContinuationSolver")
 }
 
 

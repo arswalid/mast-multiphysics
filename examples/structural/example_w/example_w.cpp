@@ -1478,6 +1478,8 @@ public:  // parametric constructor
 
         if (if_sens) {
 
+            START_LOG("sensitivity calculation()","sensitivity calculation")
+
             libMesh::out << "** Sensitivity analysis **" << std::endl;
             // first initialize the gradient vector to zero
             std::fill(grads.begin(), grads.end(), 0.);
@@ -1574,6 +1576,7 @@ public:  // parametric constructor
 
             libMesh::out << "** sensitivity analysis DONE **" << std::endl;
 
+            STOP_LOG("sensitivity calculation()","sensitivity calculation")
         }
     }
 
