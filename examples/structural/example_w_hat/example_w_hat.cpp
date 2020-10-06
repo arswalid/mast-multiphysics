@@ -290,13 +290,14 @@ protected:      // protected member variables
     bool _if_neg_eig;
     std::map<std::string, MAST::Parameter*>   _parameters;
     std::set<MAST::FunctionBase*>             _field_functions;
+    Real _min_allowed_eig;
 public:  // parametric constructor
     StiffenedPlateThermallyStressedPistonTheorySizingOptimization(const libMesh::Parallel::Communicator &comm,
                                                                   MAST::Examples::GetPotWrapper& input) :
             MAST::FunctionEvaluation (comm),
             _input(input),
             _n_eig(0),
-
+            _min_allowed_eig(0.),
             _n_divs_x(0),
             _n_divs_y(0),
             _n_divs_between_stiff(0),
@@ -412,6 +413,7 @@ public:  // parametric constructor
         _init_fetype(); // we initialize the type of fem (1st ord lagrange default)
         _init_mesh();
 
+        _min_allowed_eig =100.;
         // number of eigenvalues
         _n_eig = 20;
         // now setup the optimization data
@@ -1220,9 +1222,10 @@ public:  // parametric constructor
             libMesh::out << "** Steady state solution w/ Newton raphson solver **" << std::endl;
         }
 
-        steady_solve.solve();
-        libMesh::NumericVector<Real> & steady_sol_wo_aero = _sys->add_vector("steady_sol_wo_aero");
-        steady_sol_wo_aero = *_sys->solution;
+        libMesh::NumericVector<Real> &
+                steady_sol_wo_aero = _sys->add_vector("steady_sol_wo_aero");
+        steady_sol_wo_aero.zero();
+        steady_sol_wo_aero.add(_sys->get_vector("base_solution"));
 
 
         
@@ -1249,7 +1252,7 @@ public:  // parametric constructor
         libMesh::out << "** modal analysis **" << std::endl;
 
         _modal_assembly->set_discipline_and_system(*_discipline, *_structural_sys); // modf_w
-        _modal_assembly->set_base_solution(*_sys->solution);
+        _modal_assembly->set_base_solution(steady_sol_wo_aero);
         _modal_elem_ops->set_discipline_and_system(*_discipline, *_structural_sys);
         _sys->eigenproblem_solve( *_modal_elem_ops, *_modal_assembly);
         _modal_assembly->clear_base_solution();
@@ -1315,8 +1318,10 @@ public:  // parametric constructor
         }
 
         // set the solution back to sol_wo_aero
-        if (if_write_output)
-        *_sys->solution = steady_sol_wo_aero;
+        if (if_write_output) {
+            (*_sys->solution).zero();
+            (*_sys->solution).add(steady_sol_wo_aero);
+        }
 
         //////////////////////////////////////////////////////////////////////
         // perform the flutter analysis
@@ -1329,9 +1334,9 @@ public:  // parametric constructor
         // aero as the base solution for all the following computations
         // Otherwise, the equilibrium state is dependent on the velocity.
 
-            // velocity should be set to zero for all residual calculations
-            (*_velocity) = 0.;
-            steady_solve.solution() = *_sys->solution;
+//            // velocity should be set to zero for all residual calculations
+              (*_velocity) = 0.;
+//            steady_solve.solution() = *_sys->solution;
 
 
 
@@ -1351,17 +1356,18 @@ public:  // parametric constructor
             //std::set<std::string> nm;
             //nm.insert(_sys->name());
             // write the solution for visualization
-            libMesh::ExodusII_IO(*_mesh).write_equation_systems("output.exo",
+            libMesh::ExodusII_IO(_sys->get_mesh()).write_equation_systems("output.exo",
                                                                 *_eq_sys);//,&nm);
-
+            MPI_Barrier(this->comm().get());
             _stress_elem->clear_discipline_and_system();
             _stress_assembly->clear_discipline_and_system();
         }
 
         // once the stress and displacement are plotted stop the exec for analysis
-        if (_if_analysis)
-            libmesh_error();
-
+        if (_if_analysis) {
+        libMesh::out << "analysis done." << std::endl;
+             libmesh_error();
+        }
         //////////////////////////////////////////////////////////////////////
         // now calculate the stress output based on the velocity output
         //////////////////////////////////////////////////////////////////////
@@ -1409,7 +1415,7 @@ public:  // parametric constructor
             // set the eigenvalue constraints  -eig <= 0. scale
             // by an arbitrary 1/1.e7 factor
             for (unsigned int i = 0; i < nconv; i++)
-                fvals[i] = -eig_vals[i] / 1.e7;
+                fvals[i] = (_min_allowed_eig - eig_vals[i]) / 1.e7;
         }
 
         //////////////////////////////////////////////////////////////////////
@@ -1671,7 +1677,7 @@ public:  // parametric constructor
 
             // create a vector to store the solution
             libMesh::NumericVector<Real>& sol = _obj._sys->get_vector("base_solution");
-            *_obj._sys->solution = sol;
+
 
 
             libmesh_assert(_obj._initialized);
@@ -1963,14 +1969,15 @@ public:  // parametric constructor
                         // change flag to true to increase obj and fvals
                         // and solve the system one last time and exit
 
-                        auto min_eig  = std::min_element(eig_vec.begin(),eig_vec.end());
-                        if ( (*min_eig < 100.0) && ( (*_obj._temp)() < max_temp) )  {
-                            _obj._if_neg_eig = true;
-                            libMesh::out << " negative eigenvalue found" << std::endl;
-                            (*_obj._temp)() = max_temp;
-                            break;
+                        if (!_obj._if_analysis) {
+                            auto min_eig = std::min_element(eig_vec.begin(), eig_vec.end());
+                            if ((*min_eig < _obj._min_allowed_eig) && ((*_obj._temp)() < max_temp)) {
+                                _obj._if_neg_eig = true;
+                                libMesh::out << " negative eigenvalue found" << std::endl;
+                                (*_obj._temp)() = max_temp;
+                                break;
+                            }
                         }
-
                         // if cont solver went wrong direction stop
                         if (  (*_obj._temp)() < 0.0 )   {
                             _obj._if_neg_eig = true;
@@ -1980,7 +1987,7 @@ public:  // parametric constructor
                         }
 
                         // max iters in cont solver is 500
-                        if (  i > 1000 )   {
+                        if (  i > n_temp_steps )   {
                             _obj._if_neg_eig = true;
                             libMesh::out << " Continuation solver reached max iters" << std::endl;
                             (*_obj._temp)() = max_temp;
@@ -2003,7 +2010,8 @@ public:  // parametric constructor
 
 
             // copy the solution to the base solution vector
-            sol = *_obj._sys->solution;
+            sol.zero();
+            sol.add(*_obj._sys->solution);
 
             _obj._nonlinear_assembly->clear_discipline_and_system();
             _obj._nonlinear_elem_ops->clear_discipline_and_system();

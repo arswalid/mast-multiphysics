@@ -152,10 +152,10 @@ MAST::FunctionEvaluation::output(unsigned int iter,
         
         *_output << std::setw(10) << iter;
         for (unsigned int i=0; i < x.size(); i++)
-            *_output << std::setw(20) << x[i];
+            *_output << std::setw(20) << std::setprecision(15) << x[i];
         *_output << std::setw(20) << obj;
         for (unsigned int i=0; i < fval.size(); i++)
-            *_output << std::setw(20) << fval[i];
+            *_output << std::setw(20) << std::setprecision(5) << fval[i];
         *_output << std::endl;
     }
 }
@@ -245,7 +245,7 @@ MAST::FunctionEvaluation::verify_gradients(const std::vector<Real>& dvars) {
     
     // first call theh evaluate method to get the analytical sensitivities
     Real
-    delta           = 1.e-5,
+    delta           = 1.e-5,//-5
     tol             = 1.e-3,
     obj             = 0.,
     obj_fd_p        = 0.,  // at x+h
@@ -351,6 +351,10 @@ MAST::FunctionEvaluation::verify_gradients(const std::vector<Real>& dvars) {
     
     bool accurate_sens = true;
 
+    //print error to txt file
+    std::ofstream error_file;
+    error_file.open("error_file.txt", std::ofstream::out);
+
     libMesh::out
     << std::setw(10) << "DV"
     << std::setw(30) << "Analytical"
@@ -387,11 +391,33 @@ MAST::FunctionEvaluation::verify_gradients(const std::vector<Real>& dvars) {
             << std::setw(10) << i
             << std::setw(30) << grads[i*(_n_eq+_n_ineq)+j]
             << std::setw(30) << grads_fd[i*(_n_eq+_n_ineq)+j];
-            if (fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]) > tol) {
-                libMesh::out << " : Mismatched sensitivity";
+
+            if (fabs(grads_fd[i*(_n_eq+_n_ineq)+j]) > 1.e-4){
+            if (fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]) > tol)
+                {
+                libMesh::out << " : Mismatched sensitivity   relative error: " << fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]);
                 accurate_sens = false;
+                }
+            }
+            else {
+                if (fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]) > 0.1)
+                {
+                    libMesh::out << " : Mismatched sensitivity   relative error: " << fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]);
+                    accurate_sens = false;
+                }
             }
             libMesh::out << std::endl;
+
+            if (fabs(grads[i*(_n_eq+_n_ineq)+j]) > 1e-10) {
+                error_file << fabs((grads[i * (_n_eq + _n_ineq) + j] - grads_fd[i * (_n_eq + _n_ineq) + j]) /
+                                   grads[i * (_n_eq + _n_ineq) + j]) << std::setw(10) ;
+
+                        if  ((fabs(grads_fd[i*(_n_eq+_n_ineq)+j]) < 1.e-4) && (fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]) > 0.1))
+                            error_file << 1;
+                        else error_file << 0;
+
+                        error_file << std::endl;
+            }
         }
     }
     // print the message that all sensitivity data satisfied limits.

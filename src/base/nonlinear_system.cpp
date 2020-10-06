@@ -152,8 +152,8 @@ MAST::NonlinearSystem::init_data () {
         EPSSetOptionsPrefix(eps, nm.c_str());
     }
     eigen_solver->set_eigenproblem_type(_eigen_problem_type);
-    
-    
+
+
     linear_solver.reset(new libMesh::PetscLinearSolver<Real>(this->comm()));
     if (libMesh::on_command_line("--solver_system_names")) {
         
@@ -183,7 +183,7 @@ void MAST::NonlinearSystem::reinit () {
         EPSSetOptionsPrefix(eps, nm.c_str());
     }
     eigen_solver->set_eigenproblem_type(_eigen_problem_type);
-    
+
     
     linear_solver.reset(new libMesh::PetscLinearSolver<Real>(this->comm()));
     if (libMesh::on_command_line("--solver_system_names")) {
@@ -609,6 +609,9 @@ eigenproblem_sensitivity_solve (MAST::AssemblyElemOperations&    elem_ops,
 
     std::vector<Real>
     eig (n_calc);
+
+    std::fill(eig.begin(),eig.end(),0.);
+
     
     Real
     re  = 0.,
@@ -618,7 +621,7 @@ eigenproblem_sensitivity_solve (MAST::AssemblyElemOperations&    elem_ops,
     for (unsigned int i=0; i<n_calc; i++) {
 
         x_right[i] = (this->solution->zero_clone().release());
-        
+        tmp->zero();
         
         switch (_eigen_problem_type) {
                 
@@ -669,7 +672,9 @@ eigenproblem_sensitivity_solve (MAST::AssemblyElemOperations&    elem_ops,
 
     // now calculate sensitivity of each eigenvalue for the parameter
     for (unsigned int i=0; i<n_calc; i++) {
-        
+
+        tmp->zero();
+
         switch (_eigen_problem_type) {
                 
             case libMesh::HEP: {
