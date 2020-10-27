@@ -119,7 +119,7 @@ namespace MAST {
          */
         Real
         max_step;
-        
+
         /*!
          *   exponent used in step size update.
          */

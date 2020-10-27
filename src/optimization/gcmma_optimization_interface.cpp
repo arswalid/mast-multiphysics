@@ -92,23 +92,23 @@ MAST::GCMMAOptimizationInterface::optimize() {
 
     // make sure that all processes have the same problem setup
     _feval->sanitize_parallel();
-    
+
     int
     N                  = _feval->n_vars(),
     M                  = _feval->n_eq() + _feval->n_ineq(),
     n_rel_change_iters = _feval->n_iters_relative_change();
     
     libmesh_assert_greater(N, 0);
-    
+
     std::vector<Real>  XVAL(N, 0.), XOLD1(N, 0.), XOLD2(N, 0.),
     XMMA(N, 0.), XMIN(N, 0.), XMAX(N, 0.), XLOW(N, 0.), XUPP(N, 0.),
     ALFA(N, 0.), BETA(N, 0.), DF0DX(N, 0.),
     A(M, 0.), B(M, 0.), C(M, 0.), Y(M, 0.), RAA(M, 0.), ULAM(M, 0.),
     FVAL(M, 0.), FAPP(M, 0.), FNEW(M, 0.), FMAX(M, 0.),
     DFDX(M*N, 0.), P(M*N, 0.), Q(M*N, 0.), P0(N, 0.), Q0(N, 0.),
-    UU(M, 0.), GRADF(M, 0.), DSRCH(M, 0.), HESSF(M*(M+1)/2, 0.),
+    UU(M, 0.), GRADF(M, 0.), DSRCH(M, 0.), HESSF(M*(M+1.0)/2, 0.),
     f0_iters(n_rel_change_iters);
-    
+
     std::vector<int> IYFREE(M, 0);
     std::vector<bool> eval_grads(M, false);
     

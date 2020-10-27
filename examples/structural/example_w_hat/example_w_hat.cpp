@@ -233,7 +233,7 @@ protected:      // protected member variables
     unsigned int _n_V_divs_flutter;
 
     //type of shape fuctions
-    libMesh::FEType  _fetype;
+    //libMesh::FEType  _fetype;
     Real _dx;
     bool _if_vk;
     bool _if_analysis;
@@ -410,7 +410,8 @@ public:  // parametric constructor
         // number of stations
         _n_dv_stations_x = _input("n_stations", " ", 3);
 
-        _init_fetype(); // we initialize the type of fem (1st ord lagrange default)
+        //_init_fetype(); // we initialize the type of fem (1st ord lagrange default)
+
         _init_mesh();
 
         _min_allowed_eig =100.;
@@ -598,19 +599,19 @@ public:  // parametric constructor
 
 
 
-    void _init_fetype() {
-
-        // FEType to initialize the system. Get the order and type of element.
-        std::string
-                order_str   = _input("fe_order", "order of finite element shape basis functions",    "first"),
-                family_str  = _input("fe_family",      "family of finite element shape functions", "lagrange");
-
-        libMesh::Order
-                o  = libMesh::Utility::string_to_enum<libMesh::Order>(order_str);
-        libMesh::FEFamily
-                fe = libMesh::Utility::string_to_enum<libMesh::FEFamily>(family_str);
-        _fetype = libMesh::FEType(o, fe);
-    }
+//    void _init_fetype() {
+//
+//        // FEType to initialize the system. Get the order and type of element.
+//        std::string
+//                order_str   = _input("fe_order", "order of finite element shape basis functions",    "first"),
+//                family_str  = _input("fe_family",      "family of finite element shape functions", "lagrange");
+//
+//        libMesh::Order
+//                o  = libMesh::Utility::string_to_enum<libMesh::Order>(order_str);
+//        libMesh::FEFamily
+//                fe = libMesh::Utility::string_to_enum<libMesh::FEFamily>(family_str);
+//        _fetype = libMesh::FEType(o, fe);
+//    }
 
     void _init_mesh() {
 
@@ -646,7 +647,6 @@ public:  // parametric constructor
                             e_type,
                         _input("per1","",.0),
                         _input("per2","",.0));
-
 
         libMesh::out
                 << "//////////////////////////////////////////////////////////////////" << std::endl
@@ -1221,6 +1221,8 @@ public:  // parametric constructor
         } else{
             libMesh::out << "** Steady state solution w/ Newton raphson solver **" << std::endl;
         }
+
+        steady_solve.solve();
 
         libMesh::NumericVector<Real> &
                 steady_sol_wo_aero = _sys->add_vector("steady_sol_wo_aero");
@@ -1825,7 +1827,7 @@ public:  // parametric constructor
                         dof_num = nd->dof_number(0, 2, 0);
 
                 unsigned int
-                        n_temp_steps  = _obj._input( "n_temp_steps", "number of load steps for temperature increase",  1000);
+                        n_temp_steps  = _obj._input( "n_temp_steps", "number of load steps for temperature increase",  10000);
 
 
                 // write the header to the load.txt file
@@ -1867,7 +1869,7 @@ public:  // parametric constructor
                     solver.max_it              = _obj._input("max_it", "max nr iterations",          10);
                     solver.max_step            = _obj._input("max_step", "maximum arc-length step-size for continuation solver",   20.);
                     solver.step_desired_iters  = _obj._input("step_desired_iters", "maximum arc-length step-size for continuation solver",5);
-
+                    solver.rel_tol             = _obj._input("rel_tol", "relative tolerence in c-solver",1.e-7);
 
 
                     // specify temperature as the load parameter to be changed per
@@ -1986,13 +1988,6 @@ public:  // parametric constructor
                             break;
                         }
 
-                        // max iters in cont solver is 500
-                        if (  i > n_temp_steps )   {
-                            _obj._if_neg_eig = true;
-                            libMesh::out << " Continuation solver reached max iters" << std::endl;
-                            (*_obj._temp)() = max_temp;
-                            break;
-                        }
 
                         // if the temperature given by the solver is bigger than tmax
                         // go back to tmax and solve the system one more time and exit
@@ -2086,7 +2081,7 @@ int main(int argc, char* argv[]) {
     
     
     unsigned int
-            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 2);
+            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 10);
 
     Real
             constr_penalty         = _input("constraint_penalty", "constraint penalty in GCMMA", 50.),

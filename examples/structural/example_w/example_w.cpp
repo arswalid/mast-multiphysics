@@ -301,7 +301,7 @@ public:  // parametric constructor
             _mesh(nullptr),
             _hoff_plate_f(nullptr),
             _min_allowed_eig(0.),
-            
+
             _weight(nullptr),
             _m_card(nullptr),
             
@@ -997,12 +997,12 @@ public:  // parametric constructor
 
             _hzoff_stiff_f[i] = new MAST::SectionOffset("hz_off",
                                         *_thz_stiff_f[i],
-                                        -1.);
+                                        -0.5);
 
             _thyoff_stiff_f = new MAST::ConstantFieldFunction("hy_off", *_zero);
 
             RealVectorX orientation = RealVectorX::Zero(3);
-            orientation(2) = -1.;
+            orientation(1) = 1.;
             // property card per stiffener
             _p_card_stiff[i] = new MAST::Solid1DSectionElementPropertyCard;
             
@@ -1452,7 +1452,7 @@ public:  // parametric constructor
             // set the eigenvalue constraints  -eig <= 0. scale
             // by an arbitrary 1/1.e7 factor
             for (unsigned int i = 0; i < nconv; i++)
-                fvals[i] = (_min_allowed_eig - eig_vals[i])/ 1.e6;
+                fvals[i] = (_min_allowed_eig - eig_vals[i])/ 1.e7;
         }
 
         //////////////////////////////////////////////////////////////////////
@@ -1551,7 +1551,7 @@ public:  // parametric constructor
                                                          eig_sens);
 
                     for (unsigned int j = 0; j < nconv; j++) {
-                        grads[(i * _n_ineq) + j] = -_dv_scaling[i] * eig_sens[j] / 1.e6;
+                        grads[(i * _n_ineq) + j] = -_dv_scaling[i] * eig_sens[j] / 1.e7;
                     }
 
                     _modal_assembly->clear_base_solution(true);
@@ -1921,7 +1921,7 @@ public:  // parametric constructor
                     solver.max_it              = _obj._input("max_it", "max nr iterations",          10);
                     solver.max_step            = _obj._input("max_step", "maximum arc-length step-size for continuation solver",   20.);
                     solver.step_desired_iters  = _obj._input("step_desired_iters", "maximum arc-length step-size for continuation solver",5);
-
+                    solver.rel_tol             = _obj._input("rel_tol", "relative tolerence in c-solver",1.e-7);
 
 
                     // specify temperature as the load parameter to be changed per
@@ -2135,7 +2135,7 @@ int main(int argc, char* argv[]) {
 
 
     unsigned int
-            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 15);
+            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 10);
 
     Real
             constr_penalty         = _input("constraint_penalty", "constraint penalty in GCMMA", 50.),

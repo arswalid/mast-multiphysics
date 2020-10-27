@@ -61,7 +61,7 @@ MAST::PseudoArclengthContinuationSolver::initialize(Real dp) {
     _t0_X->add(-1., *system.solution);
     _t0_X->scale(-1.);
     _t0_X->close();
-    
+
     // initialize scaling factors
     _X_scale   = 1./_t0_X->l2_norm();
     _p_scale   = 1./std::fabs(dp);

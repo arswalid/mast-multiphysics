@@ -29,6 +29,8 @@
 #include <libmesh/fe_type.h>
 #include <libmesh/numeric_vector.h>
 #include <libmesh/boundary_info.h>
+#include <base/eigenproblem_assembly.h>
+#include <libmesh/exodusII_io.h>
 
 // MAST includes.
 #include "base/nonlinear_system.h"
@@ -60,9 +62,9 @@ int main(int argc, const char** argv)
     //   A "ReplicatedMesh" is one where all MPI processes have the full mesh in memory, as compared to a "DistributedMesh" where the mesh is
     //   "chunked" up and distributed across processes, each having their own piece.
     libMesh::ReplicatedMesh mesh(init.comm());
-    libMesh::MeshTools::Generation::build_line(mesh, 5, 0.0, 10.0);
+    libMesh::MeshTools::Generation::build_line(mesh, 5000, 0.0, 10.0,libMesh::EDGE3 );
     mesh.print_info();
-    mesh.boundary_info->print_info();
+    //mesh.boundary_info->print_info();
 
     // Create EquationSystems object, which is a container for multiple systems of equations that are defined on a given mesh.
     libMesh::EquationSystems equation_systems(mesh);
@@ -71,12 +73,11 @@ int main(int argc, const char** argv)
     //   We name the system "structural" and also get a reference to the system so we can easily reference it later.
     MAST::NonlinearSystem & system = equation_systems.add_system<MAST::NonlinearSystem>("structural");
 
-    // solve eigenproblem around steady state
     system.set_eigenproblem_type(libMesh::GHEP);
 
     // Create a finite element type for the system. Here we use first order
     // Lagrangian-type finite elements.
-    libMesh::FEType fetype(libMesh::FIRST, libMesh::LAGRANGE);
+    libMesh::FEType fetype(libMesh::SECOND, libMesh::LAGRANGE);
 
     // Initialize the system to the correct set of variables for a structural
     // analysis. In libMesh this is analogous to adding variables (each with
@@ -91,9 +92,13 @@ int main(int argc, const char** argv)
 
     // Create and add boundary conditions to the structural system. A Dirichlet BC fixes the left end of the bar.
     // This definition uses the numbering created by the libMesh mesh generation function.
-    MAST::DirichletBoundaryCondition dirichlet_bc;
-    dirichlet_bc.init(0, structural_system.vars());
-    discipline.add_dirichlet_bc(0, dirichlet_bc);
+    MAST::DirichletBoundaryCondition dirichlet_bc_left,dirichlet_bc_right;
+    dirichlet_bc_left.init(0, {0,1,2,3,4,5});
+    dirichlet_bc_right.init(1, {0,1,2,3,4,5});
+
+    discipline.add_dirichlet_bc(0, dirichlet_bc_left);
+    discipline.add_dirichlet_bc(1, dirichlet_bc_right);
+
     discipline.init_system_dirichlet_bc(system);
 
     // Initialize the equation system since we now know the size of our
@@ -104,39 +109,48 @@ int main(int argc, const char** argv)
     equation_systems.init();
 
     //The EigenSolver, definig which interface, i.e solver package to use.
+    // solve eigenproblem around steady state
+
     system.eigen_solver->set_position_of_spectrum(libMesh::LARGEST_MAGNITUDE);
     system.set_exchange_A_and_B(true);
-    system.set_n_requested_eigenvalues(4);
+    system.set_n_requested_eigenvalues(20);
+    system.initialize_condensed_dofs(discipline);
 
-
-    equation_systems.print_info();
+    //equation_systems.print_info();
 
     // Create parameters.
-    MAST::Parameter thickness_y("thy", 0.06);
-    MAST::Parameter thickness_z("thz", 0.02);
+    MAST::Parameter thickness_y("thy", 0.05);
+    MAST::Parameter thickness_z("thz", 0.05);
     MAST::Parameter E("E", 72.0e9);
     MAST::Parameter nu("nu", 0.33);
     MAST::Parameter zero("zero", 0.0);
-    MAST::Parameter pressure("p", 2.0e4);
+    MAST::Parameter pressure("p", -1.0e0);
     MAST::Parameter kappa_yy("kappa_yy", 5./6.);
     MAST::Parameter kappa_zz("kappa_zz", 5./6.);
+    MAST::Parameter rho("rho", 2700.0);
+    MAST::Parameter offset("offset", -0.05);
 
     // Create ConstantFieldFunctions used to spread parameters throughout the model.
     MAST::ConstantFieldFunction thy_f("hy", thickness_y);
     MAST::ConstantFieldFunction thz_f("hz", thickness_z);
     MAST::ConstantFieldFunction E_f("E", E);
     MAST::ConstantFieldFunction nu_f("nu", nu);
-    MAST::ConstantFieldFunction hyoff_f("hy_off", zero);
+    MAST::ConstantFieldFunction hyoff_f("hy_off", offset);
     MAST::ConstantFieldFunction hzoff_f("hz_off", zero);
     MAST::ConstantFieldFunction pressure_f("pressure", pressure);
     MAST::ConstantFieldFunction kappa_yy_f("Kappayy", kappa_yy);
     MAST::ConstantFieldFunction kappa_zz_f("Kappazz", kappa_zz);
+    MAST::ConstantFieldFunction rho_f("rho", rho);
 
     // Initialize load.
     // TODO - Switch this to a concentrated/point load on the right end of the bar.
     MAST::BoundaryConditionBase right_end_pressure(MAST::SURFACE_PRESSURE);
     right_end_pressure.add(pressure_f);
-    discipline.add_side_load(1, right_end_pressure);
+    discipline.add_volume_load(0, right_end_pressure);
+
+//    MAST::BoundaryConditionBase pressure_surf(MAST::SURFACE_PRESSURE);
+//    pressure_surf.add(pressure_f);
+//    discipline.add_volume_load(0,pressure_surf);
 
     // Create the material property card ("card" is NASTRAN lingo) and the relevant parameters to it. An isotropic
     // material needs elastic modulus (E) and Poisson ratio (nu) to describe its behavior.
@@ -161,6 +175,7 @@ int main(int argc, const char** argv)
 
     // Attach material to the card.
     section.set_material(material);
+    section.set_strain(MAST::NONLINEAR_STRAIN);
 
     // Initialize the section and specify the subdomain in the mesh that it applies to.
     section.init();
@@ -171,26 +186,76 @@ int main(int argc, const char** argv)
 
     MAST::NonlinearImplicitAssembly assembly;
     MAST::StructuralNonlinearAssemblyElemOperations elem_ops;
-    assembly.set_discipline_and_system(discipline, structural_system);
-    elem_ops.set_discipline_and_system(discipline, structural_system);
-    MAST::NonlinearSystem& nonlinear_system = assembly.system();
-
-    // Zero the solution before solving.
-    nonlinear_system.solution->zero();
-
-    // Solve the system and print displacement degrees-of-freedom to screen.
-    nonlinear_system.solve(elem_ops, assembly);
-
     MAST::EigenproblemAssembly                               modal_assembly;
     MAST::StructuralModalEigenproblemAssemblyElemOperations  modal_elem_ops;
 
+    assembly.set_discipline_and_system(discipline, structural_system);
+    elem_ops.set_discipline_and_system(discipline, structural_system);
     modal_assembly.set_discipline_and_system(discipline, structural_system); // modf_w
-    modal_assembly.set_base_solution(*nonlinear_system.solution);
     modal_elem_ops.set_discipline_and_system(discipline, structural_system);
+
+    // Zero the solution before solving.
+    system.solution->zero();
+
+    // Solve the system and print displacement degrees-of-freedom to screen.
+    system.solve(elem_ops, assembly);
+
+    libMesh::out << "Writing solution to : solution.exo" << std::endl;
+    libMesh::ExodusII_IO(mesh).write_equation_systems("solution.exo",
+                                                        equation_systems);
+    //system.solution->print_global();
+
+    modal_assembly.set_base_solution(*system.solution);
     system.eigenproblem_solve( modal_elem_ops, modal_assembly);
 
-    nonlinear_system.solution->print_global();
 
+
+    libMesh::ExodusII_IO writer(mesh) ;
+    std::vector<libMesh::NumericVector<Real> *> _basis;
+    unsigned int
+            nconv = std::min(system.get_n_converged_eigenvalues(),
+                             system.get_n_requested_eigenvalues());
+
+    _basis.resize(nconv);
+
+    for (unsigned int i = 0; i < nconv; i++) {
+
+        // create a vector to store the basis
+
+            _basis[i] = (system.solution->zero_clone().release()); // what happens in this line ?
+
+        // now write the eigenvalue
+        Real
+                re = 0.,
+                im = 0.;
+        system.get_eigenpair(i, re, im, *_basis[i]);
+
+        libMesh::out
+                << std::setw(35) << std::fixed << std::setprecision(15)
+                << re << std::endl;
+
+            // copy the solution for output
+            system.solution->zero();
+            system.solution->add(*_basis[i]);
+
+            // We write the file in the ExodusII format.
+            writer.write_timestep("modes.exo",
+                                   equation_systems,
+                                   i + 1, //  time step
+                                   i);    //  time
+
+    }
+
+    modal_assembly.clear_base_solution();
+    assembly.clear_discipline_and_system();
+    elem_ops.clear_discipline_and_system();
+
+    modal_assembly.clear_discipline_and_system();
+    modal_elem_ops.clear_discipline_and_system();
+
+    for (unsigned int i = 0; i < nconv; i++)
+       delete  _basis[i];
+    
     // END_TRANSLATE
     return 0;
 }

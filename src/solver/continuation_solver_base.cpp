@@ -163,7 +163,7 @@ MAST::ContinuationSolverBase::solve()  {
     << std::setw(20) << "relative res-l2: "
     << std::setw(15) << norm/norm0
     << std::setw(20) << "Terminated"  << std::endl;
-    
+
     if (iter) {
         Real
         factor   = std::pow((1.*step_desired_iters)/(1.*iter+1.), step_size_change_exponent);

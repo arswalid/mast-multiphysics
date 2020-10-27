@@ -998,7 +998,7 @@ public:  // parametric constructor
 
             _hyoff_stiff_f = new MAST::ConstantFieldFunction("hy_off", *_zero);
             RealVectorX orientation = RealVectorX::Zero(3);
-            orientation(2) = 1.;
+            orientation(1) = 1.;
 
 
 
@@ -1008,7 +1008,7 @@ public:  // parametric constructor
                 _thz_stiff_f[i] = new MAST::MultilinearInterpolation("hz", _thz_station_vals);
                 _hzoff_stiff_f[i] = new MAST::SectionOffset("hz_off",
                                                             *_thz_stiff_f[i],
-                                                            -1.);
+                                                            -.5);
 
                 _p_card_stiff[i] = new MAST::Solid1DSectionElementPropertyCard;
             
@@ -1959,7 +1959,7 @@ public:  // parametric constructor
                     solver.max_it              = _obj._input("max_it", "max nr iterations",          10);
                     solver.max_step            = _obj._input("max_step", "maximum arc-length step-size for continuation solver",   20.);
                     solver.step_desired_iters  = _obj._input("step_desired_iters", "maximum arc-length step-size for continuation solver",5);
-
+                    solver.rel_tol             = _obj._input("rel_tol", "relative tolerence in c-solver",1.e-7);
 
 
                     // specify temperature as the load parameter to be changed per
@@ -2090,18 +2090,6 @@ public:  // parametric constructor
                         
 
 
-                        // if a negative eigenvalue is detected
-                        // change flag to true to increase obj and fvals
-                        // and solve the system one last time and exit
-
-//                        auto min_eig  = std::min_element(eig_vec.begin(),eig_vec.end());
-//                        if ( (*min_eig < _min_freq) && ( (*_obj._temp)() < max_temp) )  {
-//                            _obj._if_neg_eig = true;
-//                            libMesh::out << " negative eigenvalue found" << std::endl;
-//                            (*_obj._temp)() = max_temp;
-//                            break;
-//                        }
-
                         if (  (*_obj._temp)() < 0.0 )   {
                             _obj._if_neg_eig = true;
                             libMesh::out << " Continuation solver diverged" << std::endl;
@@ -2122,12 +2110,7 @@ public:  // parametric constructor
                             //_obj._vec_of_solutions[i]->clear();
                             //_obj._vec_of_solutions[i] = &(_obj._sys->add_vector("sol_iter"));
                             _obj._vec_of_solutions[i]->zero();
-                            _obj._vec_of_solutions[i]->print_matlab("solution_last_iter_aftzero.txt");
                             _obj._vec_of_solutions[i]->add(*_obj._sys->solution);
-
-                            _obj._vec_of_solutions[i]->print_matlab("solution_last_iter.txt");
-                            //libMesh::NumericVector<Real>  sol_iter = _obj._sys->solution;
-                            //_obj._vec_of_solutions[i] = &sol_iter;
                             break;
                         }
                     }
@@ -2213,7 +2196,7 @@ int main(int argc, char* argv[]) {
     
 
     unsigned int
-            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 15);
+            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 10);
 
     Real
             constr_penalty         = _input("constraint_penalty", "constraint penalty in GCMMA", 50.),
