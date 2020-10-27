@@ -420,8 +420,7 @@ public:  // parametric constructor
         // now setup the optimization data
         _n_vars = _n_dv_stations_x + _n_dv_stations_x * _n_stiff; // for thickness variable
         _n_eq = 0;
-        _n_ineq = _n_eig + 1 +
-                  _n_elems;// constraint that each eigenvalue > 0 flutter constraint + one element stress functional per elem
+        _n_ineq = 0;
 
         _max_iters = 1000;
 
