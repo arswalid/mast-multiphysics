@@ -1662,6 +1662,30 @@ public:  // parametric constructor
         _stress_assembly->clear_discipline_and_system();
 
         MAST::FunctionEvaluation::output(iter, x, obj, fval, if_write_to_optim_file);
+
+        std::ifstream    inFile("continuation_solver_eig.txt");
+        std::ofstream    outFile("continuation_solver_eig_lastitr.txt");
+
+        outFile << inFile.rdbuf();
+
+        std::ifstream in("sol_continuation_solver.exo",
+                         std::ios_base::in | std::ios_base::binary);  // Use binary mode so we can
+        std::ofstream out("sol_continuation_solver_last_itr.exo",            // handle all kinds of file
+                          std::ios_base::out | std::ios_base::binary); // content.
+
+        // Make sure the streams opened okay...
+
+        char buf[4096];
+
+        do {
+            in.read(&buf[0], 4096);      // Read at most n bytes into
+            out.write(&buf[0], in.gcount()); // buf, then write the buf to
+        } while (in.gcount() > 0);          // the output.
+
+        // Check streams for problems...
+
+        in.close();
+        out.close();
     }
 
 
@@ -1900,7 +1924,7 @@ public:  // parametric constructor
                     out_eig
                             << std::setw(10) << "iter"
                             << std::setw(25) << "temperature"
-                            << std::setw(25) << "pressure";
+                            << std::setw(25) << "displ";
 
                     for (int di = 0; di < _obj._n_eig; di++)
                         out_eig  << std::setw(25) << "Re_of_eigenvalue" << di+1;
@@ -1974,7 +1998,7 @@ public:  // parametric constructor
                                 out_eig
                                         << std::setw(10) << i
                                         << std::setw(25) << (*_obj._temp)()
-                                        << std::setw(25) << (*_obj._p_cav)();
+                                        << std::setw(25) << vec1[0];
                             }
 
                             std::fill(eig_vec.begin(), eig_vec.end(), 0.);
