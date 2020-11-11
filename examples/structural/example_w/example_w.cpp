@@ -557,74 +557,8 @@ public:  // parametric constructor
                 _outputs.clear();
             }
 
-
-            // delete the h_y station functions
-            {
-                std::vector<MAST::ConstantFieldFunction *>::iterator
-                        it = _th_station_functions_plate.begin(),
-                        end = _th_station_functions_plate.end();
-                for (; it != end; it++) delete *it;
-            }
-
-
-            {
-                std::vector<MAST::ConstantFieldFunction *>::iterator
-                        it = _thy_station_functions_stiff.begin(),
-                        end = _thy_station_functions_stiff.end();
-                for (; it != end; it++) delete *it;
-            }
-
-            {
-                std::vector<MAST::ConstantFieldFunction *>::iterator
-                        it = _thz_station_functions_stiff.begin(),
-                        end = _thz_station_functions_stiff.end();
-                for (; it != end; it++) delete *it;
-            }
-
-
-            // delete the h_y station parameters
-            {
-                std::vector<MAST::Parameter *>::iterator
-                        it = _th_station_parameters_plate.begin(),
-                        end = _th_station_parameters_plate.end();
-                for (; it != end; it++) delete *it;
-            }
-
-
-            {
-                std::vector<MAST::Parameter *>::iterator
-                        it = _thy_station_parameters_stiff.begin(),
-                        end = _thy_station_parameters_stiff.end();
-                for (; it != end; it++) delete *it;
-            }
-
-            {
-                std::vector<MAST::Parameter *>::iterator
-                        it = _thz_station_parameters_stiff.begin(),
-                        end = _thz_station_parameters_stiff.end();
-                for (; it != end; it++) delete *it;
-            }
-            
         }
     }
-
-
-
-
-
-//    void _init_fetype() {
-//
-//        // FEType to initialize the system. Get the order and type of element.
-//        std::string
-//                order_str   = _input("fe_order", "order of finite element shape basis functions",    "first"),
-//                family_str  = _input("fe_family",      "family of finite element shape functions", "lagrange");
-//
-//        libMesh::Order
-//                o  = libMesh::Utility::string_to_enum<libMesh::Order>(order_str);
-//        libMesh::FEFamily
-//                fe = libMesh::Utility::string_to_enum<libMesh::FEFamily>(family_str);
-//        _fetype = libMesh::FEType(o, fe);
-//    }
 
     void _init_mesh() {
 
@@ -648,8 +582,6 @@ public:  // parametric constructor
 
         _n_plate_elems = _n_divs_x * (_n_stiff + 1) * _n_divs_between_stiff;
 
-//        if (e_type == libMesh::TRI3)
-//            _n_plate_elems *= 2;
 
         _n_elems_per_stiff = _n_divs_x;
         _n_elems = _n_plate_elems + _n_stiff * _n_elems_per_stiff;
@@ -1610,6 +1542,15 @@ public:  // parametric constructor
             _nonlinear_assembly->clear_discipline_and_system();
             _nonlinear_elem_ops->clear_discipline_and_system();
 
+            std::ofstream sens_vals;  // text file for eigenvalues
+            sens_vals.open("sens_vals.txt", std::ofstream::out);
+
+            for (unsigned int i = 0; i < _n_vars; i++) {
+                for (unsigned int j = 0; j < (_n_eq + _n_ineq); j++) {
+                    sens_vals << std::setw(25) << grads[(i * _n_ineq) + j];
+                }
+                sens_vals << std::endl;
+            }
 
             libMesh::out << "** sensitivity analysis DONE **" << std::endl;
 
@@ -1986,8 +1927,7 @@ public:  // parametric constructor
                         }
 
 
-                        if (true //i%2== 0
-                                ){
+
                             _obj._modal_assembly->set_base_solution(*_obj._sys->solution);
                             _obj._sys->eigenproblem_solve( *_obj._modal_elem_ops, *_obj._modal_assembly);
                             unsigned int
@@ -2023,7 +1963,7 @@ public:  // parametric constructor
 
                             out_eig << std::endl;
                             _obj._modal_assembly->clear_base_solution();
-                        }
+
 
 
                         _obj._sys->time += dt;
