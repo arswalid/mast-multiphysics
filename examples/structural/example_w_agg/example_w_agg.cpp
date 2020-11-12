@@ -1162,7 +1162,7 @@ public:  // parametric constructor
         bool
         if_write_output = _input("if_write_output", "print outputs", false);
 
-        
+
         //////////////////////////////////////////////////////////////////////
         libMesh::out << " calculation of wheight " << std::endl;
         // the optimization problem is defined as
@@ -1304,7 +1304,7 @@ public:  // parametric constructor
             (*_sys->solution).zero();
             (*_sys->solution).add(steady_sol_wo_aero);
         }
-        
+
         //////////////////////////////////////////////////////////////////////
         // perform the flutter analysis
         //////////////////////////////////////////////////////////////////////
@@ -1313,7 +1313,7 @@ public:  // parametric constructor
         (*_velocity) = 0.;
 //        steady_solve.solution() = steady_sol_wo_aero;
 //        *_sys->solution = steady_sol_wo_aero;
-        
+
 
         //////////////////////////////////////////////////////////////////////
         //  plot stress solution
@@ -1348,13 +1348,13 @@ public:  // parametric constructor
         //////////////////////////////////////////////////////////////////////
 
         _nonlinear_assembly->set_discipline_and_system(*_discipline, *_structural_sys);
-        
+
         std::unique_ptr<libMesh::NumericVector<Real>>
                     localized_sol(_nonlinear_assembly->build_localized_vector(*_sys, steady_sol_wo_aero).release());
-        
+
         for (int i=0; i < _mesh->n_local_elem() ; i++){
             _nonlinear_assembly->calculate_output(*localized_sol, false, *_outputs[i]);
-        }   
+        }
         _nonlinear_assembly->clear_discipline_and_system();
 
 
@@ -1498,9 +1498,10 @@ public:  // parametric constructor
                     grad_stress[(i * _n_ineq) + (_prev_elems[_communicator.rank()] + j + _n_eig + 1)] =
                             _dv_scaling[i] / _stress_limit *
                             _outputs[j]->output_sensitivity_total(*(_problem_parameters[i]));
+                    _outputs[j]->clear_sensitivity_data();
                 }
 
-
+                _sys->get_sensitivity_solution(0).zero();
                 // if all eigenvalues are positive, calculate at the sensitivity of
                 // flutter velocity
                 // if no root was found, then set the sensitivity to a zero value
@@ -1520,8 +1521,6 @@ public:  // parametric constructor
                 libMesh::out << "freq grad design variable " << i << std::endl;
                         for (int k=0 ; k < _freq[0].size(); k++ ){
                         // set the solution
-                        //*_sys->solution = *_vec_of_solutions[k];
-                        //_modal_assembly->set_base_solution(*_vec_of_solutions[k]);
                             _modal_assembly->set_base_solution(*_vec_of_solutions[k]);
                             std::unique_ptr<libMesh::NumericVector<Real>>
                                     localized_sol(_nonlinear_assembly->build_localized_vector(*_sys, *_vec_of_solutions[k]).release());
@@ -1533,10 +1532,8 @@ public:  // parametric constructor
                                                 *_nonlinear_assembly,
                                                 *_problem_parameters[i],
                                                 true);
-//                            //libMesh::out << "deig" << std::endl;
-//                            std::unique_ptr<libMesh::NumericVector<Real>>
-//                                    localized_sol_sens(_nonlinear_assembly->build_localized_vector
-//                                    (*_sys, _sys->get_sensitivity_solution(0)).release());
+
+
                           _modal_assembly->set_base_solution(_sys->get_sensitivity_solution(0), true);
 
                           std::vector<Real> eig_sens(nconv,0.);
@@ -1544,12 +1541,11 @@ public:  // parametric constructor
                                                              *_modal_assembly,
                                                              *_problem_parameters[i],
                                                              eig_sens);
-//for (int op = 0 ; op < eig_sens.size(); op++)
-//std::cout << eig_sens[op] << std::endl;
+
                             for (unsigned int j = 0; j < nconv; j++) {
                                 auto min_eig  = std::min_element(_freq[j].begin(),_freq[j].end());
-                                Real    summ = 0,
-                                        summ_der = 0;
+                                Real    summ = 0.,
+                                        summ_der = 0.;
 
                                 summ = exp(-_rho_agg * ((_freq[j][k]/1.e7) - (*min_eig/1.e7)));
 
@@ -1561,6 +1557,7 @@ public:  // parametric constructor
                         }
                             _modal_assembly->clear_base_solution(true);
                             _modal_assembly->clear_base_solution();
+                            _sys->get_sensitivity_solution(0).zero();
                     }
                 }
 
@@ -2067,6 +2064,8 @@ public:  // parametric constructor
                             _obj._vec_of_solutions[i]->add(*_obj._sys->solution);
                             break;
                         }
+                        if (i == (n_temp_steps-1))
+                            (*_obj._temp)() = max_temp;
                     }
                     // clear assembly and loading parameter from continuation solver
                     solver.clear_assembly_and_load_parameters();
