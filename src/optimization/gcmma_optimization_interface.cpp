@@ -276,7 +276,7 @@ MAST::GCMMAOptimizationInterface::optimize() {
             ///////////////////////////////////////////////////////////////
             // if the solution is poor, backtrack
             std::vector<Real> XMMA_new(XMMA);
-            Real frac = 0.02;
+            Real frac = 0.2;
             while (FNEW[0] > 1.e2) {
                 libMesh::out << "*** Backtracking: frac = "
                 << frac

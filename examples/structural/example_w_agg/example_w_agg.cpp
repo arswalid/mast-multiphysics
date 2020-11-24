@@ -563,7 +563,6 @@ public:  // parametric constructor
 
 
             for (int i = 0 ; i < _vec_of_solutions.size(); i++) {
-                _vec_of_solutions[i]->clear();
                 std::stringstream sol_iter; sol_iter << "sol_iter_" << i;
                 _sys->remove_vector(sol_iter.str());
             }
@@ -713,7 +712,8 @@ public:  // parametric constructor
                 th_l     = _input("thickness_lower", "", 0.001),
                 th_u     = _input("thickness_upper", "", 0.2),
                 th       = _input("thickness", "", 0.2),
-		        th_stiff = _input("thickness_stiff","",0.2);
+                th_stiffy = _input("thickness_stiff_y","",0.2),
+                th_stiffz = _input("thickness_stiff_z","",0.2);
 
         //distance btw stations
         _dx = _length / (_n_dv_stations_x - 1);
@@ -734,8 +734,11 @@ public:  // parametric constructor
             _dv_init[i] = _input("dv_init", "", th / th_u, i);
         }
 
-        for (unsigned int i = _n_dv_stations_x; i < _n_vars; i++) {
-            _dv_init[i] = _input("dv_init", "", th_stiff / th_u, i);
+        for (unsigned int j = 0; j < _n_stiff; j++) {
+            for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
+                _dv_init[(2 * j + 1) * _n_dv_stations_x + i] = _input("dv_init", "", th_stiffy / th_u, i);
+                _dv_init[(2 * j + 2) * _n_dv_stations_x + i] = _input("dv_init", "", th_stiffz / th_u, i);
+            }
         }
 
     }
@@ -898,8 +901,8 @@ public:  // parametric constructor
                 // specified station and a constant function that defines the
                 // field function at that location.
                 MAST::Parameter
-                        *h_y = new MAST::Parameter(ossy.str(), _input("thickness_stiff", "", 0.002)),
-                        *h_z = new MAST::Parameter(ossz.str(), _input("thickness_stiff", "", 0.002));
+                        *h_y = new MAST::Parameter(ossy.str(), _input("thickness_stiff_y", "", 0.002)),
+                        *h_z = new MAST::Parameter(ossz.str(), _input("thickness_stiff_z", "", 0.002));
 
                 MAST::ConstantFieldFunction
                         *h_y_f = new MAST::ConstantFieldFunction(ossy.str(), *h_y),
@@ -1204,12 +1207,20 @@ public:  // parametric constructor
 
         steady_solve.solve();
 
+        // for this example the flag will be true if max itrs are reached
+        if (_if_neg_eig) {
+            obj = 1.e10;
+            for (unsigned int i=0; i<_n_ineq; i++)
+                fvals[i] = 1.e10;
+            return;
+        }
 
         // us this solution as the base solution later if no flutter is found.
         libMesh::NumericVector<Real> &
                 steady_sol_wo_aero = _sys->add_vector("steady_sol_wo_aero");
         steady_sol_wo_aero.zero();
         steady_sol_wo_aero.add(_sys->get_vector("base_solution"));
+
 
 
         // now that we have the solution under the influence of thermal loads,
@@ -1387,7 +1398,7 @@ public:  // parametric constructor
         //////////////////////////////////////////////////////////////////////
         // evaluate the eigenvalue constraint
         //////////////////////////////////////////////////////////////////////
-        Real _rho_agg = 100.;
+        Real _rho_agg = 500.;
         if (nconv) {
             // set the eigenvalue constraints  -eig <= 0. scale
             // by an arbitrary 1/1.e7 factor
@@ -1969,21 +1980,16 @@ public:  // parametric constructor
                                     << std::setw(25) << vec1[0] << std::endl;
                         }
 
-                        //libMesh::NumericVector<Real>& sol_iter = _obj._sys->add_vector("sol_iter");
-//                        sol_iter.zero();
-//                        sol_iter.add(*_obj._sys->solution);
-                        _obj._vec_of_solutions.resize(i+1);
-                        std::stringstream sol_iter; sol_iter << "sol_iter_" << i;
-                        _obj._vec_of_solutions[i] =  &(_obj._sys->add_vector(sol_iter.str()));
-                       // _obj._vec_of_solutions[i] = _obj._sys->add_vector("sol_iter");
-                        _obj._vec_of_solutions[i]->zero();
-                        _obj._vec_of_solutions[i]->add(*_obj._sys->solution);
 
+                        // create a vector in system and store the current solution
+                        std::stringstream sol_iter; sol_iter << "sol_iter_" << i;
+                        libMesh::NumericVector<Real>& sol_iter_ptr = _obj._sys->add_vector(sol_iter.str());
+                        sol_iter_ptr.zero();
+                        sol_iter_ptr.add(*_obj._sys->solution);
 
 
                         // solve the eigenvalue problem at each iteration of cont solver
-                            _obj._modal_assembly->set_base_solution(*_obj._vec_of_solutions[i]);
-                            //_obj._modal_assembly->set_base_solution(zero_sol);
+                            _obj._modal_assembly->set_base_solution(*_obj._sys->solution);
                             _obj._sys->eigenproblem_solve( *_obj._modal_elem_ops, *_obj._modal_assembly);
                             unsigned int
                                     nconv = std::min(_obj._sys->get_n_converged_eigenvalues(),
@@ -2059,13 +2065,27 @@ public:  // parametric constructor
                             (*_obj._temp)() = max_temp;
                             _obj._sys->solve(*_obj._nonlinear_elem_ops,
                                              *_obj._nonlinear_assembly);
+                            // create a vector of solutions for all itrs in c-solver
+                            // and store each solution
+                            _obj._vec_of_solutions.resize(i+1);
 
+                            for (int j =0 ; j < i ; j++){
+                                std::stringstream sol_iter; sol_iter << "sol_iter_" << j;
+                                _obj._vec_of_solutions[j] =  _obj._sys->get_vector(sol_iter.str()).clone().release();
+                            }
+
+                            std::stringstream sol_iter; sol_iter << "sol_iter_" << i;
+                            _obj._vec_of_solutions[i] =  _obj._sys->get_vector(sol_iter.str()).clone().release();
                             _obj._vec_of_solutions[i]->zero();
                             _obj._vec_of_solutions[i]->add(*_obj._sys->solution);
+
                             break;
                         }
-                        if (i == (n_temp_steps-1))
+                        if (i == (n_temp_steps-1)) {
                             (*_obj._temp)() = max_temp;
+                            libMesh::out << " max number of itrs reached" << std::endl;
+                            _obj._if_neg_eig = true;
+                        }
                     }
                     // clear assembly and loading parameter from continuation solver
                     solver.clear_assembly_and_load_parameters();
@@ -2150,7 +2170,7 @@ int main(int argc, char* argv[]) {
     
 
     unsigned int
-            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 10);
+            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 15);
 
     Real
             constr_penalty         = _input("constraint_penalty", "constraint penalty in GCMMA", 50.),

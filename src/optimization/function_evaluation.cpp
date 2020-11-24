@@ -392,32 +392,31 @@ MAST::FunctionEvaluation::verify_gradients(const std::vector<Real>& dvars) {
             << std::setw(30) << grads[i*(_n_eq+_n_ineq)+j]
             << std::setw(30) << grads_fd[i*(_n_eq+_n_ineq)+j];
 
-            if (fabs(grads_fd[i*(_n_eq+_n_ineq)+j]) > 1.e-4){
+            if (fabs(grads_fd[i*(_n_eq+_n_ineq)+j]) > sqrt(tol)){
             if (fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]) > tol)
                 {
                 libMesh::out << " : Mismatched sensitivity   relative error: " << fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]);
                 accurate_sens = false;
                 }
             }
-            else {
-                if (fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]) > 0.1)
+            else if (fabs(grads_fd[i*(_n_eq+_n_ineq)+j]) < sqrt(tol)){
+                if (fabs(grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j]) > tol)
                 {
-                    libMesh::out << " : Mismatched sensitivity   relative error: " << fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]);
+                    libMesh::out << " : Mismatched sensitivity absolute error: " << fabs(grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j]);
                     accurate_sens = false;
                 }
             }
             libMesh::out << std::endl;
 
-            if (fabs(grads[i*(_n_eq+_n_ineq)+j]) > 1e-10) {
+            if (fabs(grads[i*(_n_eq+_n_ineq)+j]) > sqrt(tol)){
                 error_file << fabs((grads[i * (_n_eq + _n_ineq) + j] - grads_fd[i * (_n_eq + _n_ineq) + j]) /
                                    grads[i * (_n_eq + _n_ineq) + j]) << std::setw(10) ;
-
-                        if  ((fabs(grads_fd[i*(_n_eq+_n_ineq)+j]) < 1.e-4) && (fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]) > 0.1))
-                            error_file << 1;
-                        else error_file << 0;
-
-                        error_file << std::endl;
             }
+            else if (fabs(grads[i*(_n_eq+_n_ineq)+j]) < sqrt(tol)){
+                error_file << fabs(grads[i * (_n_eq + _n_ineq) + j] - grads_fd[i * (_n_eq + _n_ineq) + j])  << std::setw(10) ;
+            }
+            error_file << std::endl;
+
         }
     }
     // print the message that all sensitivity data satisfied limits.

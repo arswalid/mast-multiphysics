@@ -2021,6 +2021,11 @@ public:  // parametric constructor
                                              *_obj._nonlinear_assembly);
                             break;
                         }
+                        if (i == (n_temp_steps-1)) {
+                            (*_obj._temp)() = max_temp;
+                            _obj._if_neg_eig = true;
+                            libMesh::out << " max steps reached" << std::endl;
+                        }
                     }
                     // clear assembly and loading parameter from continuation solver
                     solver.clear_assembly_and_load_parameters();
@@ -2108,7 +2113,7 @@ int main(int argc, char* argv[]) {
     
     
     unsigned int
-            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 10);
+            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 15);
 
     Real
             constr_penalty         = _input("constraint_penalty", "constraint penalty in GCMMA", 50.),

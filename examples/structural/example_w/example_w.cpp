@@ -701,7 +701,8 @@ public:  // parametric constructor
                 th_l     = _input("thickness_lower", "", 0.001),
                 th_u     = _input("thickness_upper", "", 0.2),
                 th       = _input("thickness", "", 0.2),
-		        th_stiff = _input("thickness_stiff","",0.2);
+		        th_stiffy = _input("thickness_stiff_y","",0.2),
+                th_stiffz = _input("thickness_stiff_z","",0.2);
 
         //distance btw stations
         _dx = _length / (_n_dv_stations_x - 1);
@@ -722,9 +723,13 @@ public:  // parametric constructor
             _dv_init[i] = _input("dv_init", "", th / th_u, i);
         }
 
-        for (unsigned int i = _n_dv_stations_x; i < _n_vars; i++) {
-            _dv_init[i] = _input("dv_init", "", th_stiff / th_u, i);
+        for (unsigned int j = 0; j < _n_stiff; j++) {
+            for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
+                _dv_init[(2 * j + 1) * _n_dv_stations_x + i] = _input("dv_init", "", th_stiffy / th_u, i);
+                _dv_init[(2 * j + 2) * _n_dv_stations_x + i] = _input("dv_init", "", th_stiffz / th_u, i);
+            }
         }
+
 
     }
 
@@ -886,8 +891,8 @@ public:  // parametric constructor
                 // specified station and a constant function that defines the
                 // field function at that location.
                 MAST::Parameter
-                        *h_y = new MAST::Parameter(ossy.str(), _input("thickness_stiff", "", 0.002)),
-                        *h_z = new MAST::Parameter(ossz.str(), _input("thickness_stiff", "", 0.002));
+                        *h_y = new MAST::Parameter(ossy.str(), _input("thickness_stiff_y", "", 0.002)),
+                        *h_z = new MAST::Parameter(ossz.str(), _input("thickness_stiff_z", "", 0.002));
 
                 MAST::ConstantFieldFunction
                         *h_y_f = new MAST::ConstantFieldFunction(ossy.str(), *h_y),
@@ -1130,9 +1135,9 @@ public:  // parametric constructor
 
         // set the parameter values equal to the DV value
         // first the plate thickness values
-        for (unsigned int i = 0; i < _n_vars; i++)
-            (*_problem_parameters[i]) = dvars[i] * _dv_scaling[i];
-
+        for (unsigned int i = 0; i < _n_vars; i++) {
+                (*_problem_parameters[i]) = dvars[i] * _dv_scaling[i];
+        }
 
         // DO NOT zero out the gradient vector, since GCMMA needs it for the
         // subproblem solution
@@ -1148,7 +1153,7 @@ public:  // parametric constructor
         for (unsigned int i = 0; i < _n_vars; i++)
             libMesh::out
                     << "th     [ " << std::setw(10) << i << " ] = "
-                    << std::setw(20) << (*_problem_parameters[i])() << std::endl;
+                    << std::setw(20) << std::setprecision(15) << (*_problem_parameters[i])() << std::endl;
 
         bool
                 if_write_output = _input("if_write_output", "print outputs", false);
@@ -1509,7 +1514,7 @@ public:  // parametric constructor
                     grad_stress[(i * _n_ineq) + (_prev_elems[_communicator.rank()]+j + _n_eig + 1 )] =
                             _dv_scaling[i] / _stress_limit *
                             _outputs[j]->output_sensitivity_total(*(_problem_parameters[i]));
-                    //_outputs[j]->clear_sensitivity_data();
+                    _outputs[j]->clear_sensitivity_data();
                 }
 
 
@@ -2013,6 +2018,11 @@ public:  // parametric constructor
                                              *_obj._nonlinear_assembly);
                             break;
                         }
+                        if (i == (n_temp_steps-1)) {
+                            (*_obj._temp)() = max_temp;
+                            libMesh::out << " max number of iters reached " << std::endl;
+                            _obj._if_neg_eig = true;
+                        }
                     }
                     // clear assembly and loading parameter from continuation solver
                     solver.clear_assembly_and_load_parameters();
@@ -2099,7 +2109,7 @@ int main(int argc, char* argv[]) {
 
 
     unsigned int
-            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 10);
+            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 15);
 
     Real
             constr_penalty         = _input("constraint_penalty", "constraint penalty in GCMMA", 50.),
