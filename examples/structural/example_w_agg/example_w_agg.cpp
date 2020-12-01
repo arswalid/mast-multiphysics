@@ -132,6 +132,7 @@ stiffened_plate_thermally_stressed_piston_theory_flutter_optim_con(int*    mode,
                                                                    double* cJac,
                                                                    int*    nstate);
 
+int getIndex(std::vector<Real> v, Real K);
 
 //extern
 //libMesh::LibMeshInit     *__init;
@@ -1398,7 +1399,7 @@ public:  // parametric constructor
         //////////////////////////////////////////////////////////////////////
         // evaluate the eigenvalue constraint
         //////////////////////////////////////////////////////////////////////
-        Real _rho_agg = 500.;
+        Real _rho_agg = _input("rho_agg", "rho for aggregation",500.);
         if (nconv) {
             // set the eigenvalue constraints  -eig <= 0. scale
             // by an arbitrary 1/1.e7 factor
@@ -1528,6 +1529,67 @@ public:  // parametric constructor
                 // calculate the sensitivity of the eigenvalues
             std::vector<Real> nom(grads.size(),0.) , denom(grads.size(),0.);
             if (nconv) {
+                std::vector<std::vector<Real>> min_df(_n_eig);
+                std::vector<Real> min_eigenvalue(_n_eig,0.);
+                std::vector<int> minElement(_n_eig,0);
+
+                for (int i = 0; i<_n_eig; i++) {
+                    min_df[i] = std::vector<Real>(_n_vars, 0);
+                }
+                // find min freq and min dfdx
+
+                for (unsigned int j = 0; j < nconv; j++) {
+                    auto min_eig = std::min_element(_freq[j].begin(), _freq[j].end());
+                    auto it = find(_freq[j].begin(), _freq[j].end(), *min_eig);
+                    minElement[j] = it - _freq[j].begin();;
+                    min_eigenvalue[j] = *min_eig;
+                }
+
+                bool similar_min_freq = std::equal(minElement.begin() + 1, minElement.end(), minElement.begin()) ;
+//                auto min_temp = std::min_element(minElement.begin(), minElement.end());
+//                auto max_temp = std::max_element(minElement.begin(), minElement.end());
+//                    if ((minElement[0] == *min_temp) && (minElement[0] == *max_temp))
+//                            similar_min_freq = true ;
+
+                for (unsigned int j = 0; j < nconv; j++) {
+                    for (unsigned int i = 0; i < _n_vars; i++) {
+                        _modal_assembly->set_base_solution(*_vec_of_solutions[minElement[j]]);
+                        std::unique_ptr<libMesh::NumericVector<Real>>
+                                localized_sol(_nonlinear_assembly->build_localized_vector(*_sys, *_vec_of_solutions[minElement[j]]).release());
+
+                        //libMesh::out << "dxdp" << std::endl;
+                        _sys->sensitivity_solve(*localized_sol,
+                                                false,
+                                                *_nonlinear_elem_ops,
+                                                *_nonlinear_assembly,
+                                                *_problem_parameters[i],
+                                                true);
+
+                        _modal_assembly->set_base_solution(_sys->get_sensitivity_solution(0), true);
+
+                        std::vector<Real> eig_sens(nconv,0.);
+                        _sys->eigenproblem_sensitivity_solve(*_modal_elem_ops,
+                                                             *_modal_assembly,
+                                                             *_problem_parameters[i],
+                                                             eig_sens);
+
+                        if (similar_min_freq) {
+                            for (unsigned int j = 0; j < nconv; j++)
+                            min_df[j][i] = eig_sens[j];
+                        }
+                        else
+                            min_df[j][i] = eig_sens[j];
+
+                        _modal_assembly->clear_base_solution(true);
+                        _modal_assembly->clear_base_solution();
+                        _sys->get_sensitivity_solution(0).zero();
+                    }
+                    if (similar_min_freq)
+                        break;
+                }
+
+
+
             for (unsigned int i = 0; i < _n_vars; i++) {
                 libMesh::out << "freq grad design variable " << i << std::endl;
                         for (int k=0 ; k < _freq[0].size(); k++ ){
@@ -1553,6 +1615,8 @@ public:  // parametric constructor
                                                              *_problem_parameters[i],
                                                              eig_sens);
 
+
+
                             for (unsigned int j = 0; j < nconv; j++) {
                                 auto min_eig  = std::min_element(_freq[j].begin(),_freq[j].end());
                                 Real    summ = 0.,
@@ -1574,7 +1638,8 @@ public:  // parametric constructor
 
                 for (unsigned int i = 0; i < _n_vars; i++) {
                     for (unsigned int j = 0; j < nconv; j++) {
-                    grads[(i * _n_ineq) + j] = -_dv_scaling[i] * (nom[(i * _n_ineq) + j] / denom[(i * _n_ineq) + j]) * (-1 / _rho_agg);
+                    grads[(i * _n_ineq) + j] = -_dv_scaling[i] * ((nom[(i * _n_ineq) + j] / denom[(i * _n_ineq) + j]) * (-1 / _rho_agg)
+                                                                 - 2.e-7 * min_df[j][i] )  ;
                     }
                 }
             }
@@ -1782,6 +1847,7 @@ public:  // parametric constructor
             libMesh::out << " clear stress " << std::endl;
             _obj.clear_stresss();
             libMesh::out << " stress cleared" << std::endl;
+
 
 
             _obj._nonlinear_assembly->set_discipline_and_system(*_obj._discipline,
@@ -2144,6 +2210,28 @@ public:  // parametric constructor
 
 
 //StiffenedPlateThermallyStressedPistonTheorySizingOptimization* _my_func_eval=nullptr;
+int getIndex(std::vector<Real> v, Real K)
+{
+    int index=0;
+
+    auto it = find(v.begin(), v.end(), K);
+
+    // If element was found
+    if (it != (v.end()+1))
+    {
+
+        // calculating the index
+        // of K
+        int index = it - v.begin();
+    }
+    else {
+
+        libMesh::out << "error " << std::endl;
+        libmesh_error();
+    }
+
+    return index;
+}
 
 
 int main(int argc, char* argv[]) {
