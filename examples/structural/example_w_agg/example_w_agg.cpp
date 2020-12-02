@@ -1527,7 +1527,10 @@ public:  // parametric constructor
 
 
                 // calculate the sensitivity of the eigenvalues
-            std::vector<Real> nom(grads.size(),0.) , denom(grads.size(),0.);
+            std::vector<Real> nom(grads.size(),0.) ,
+                              denom(grads.size(),0.),
+                              dfmin_num(grads.size(),0.),
+                              dfmin_den(grads.size(),0.);
             if (nconv) {
                 std::vector<std::vector<Real>> min_df(_n_eig);
                 std::vector<Real> min_eigenvalue(_n_eig,0.);
@@ -1618,16 +1621,12 @@ public:  // parametric constructor
 
 
                             for (unsigned int j = 0; j < nconv; j++) {
-                                auto min_eig  = std::min_element(_freq[j].begin(),_freq[j].end());
-                                Real    summ = 0.,
-                                        summ_der = 0.;
 
-                                summ = exp(-_rho_agg * ((_freq[j][k]/1.e7) - (*min_eig/1.e7)));
+                                dfmin_num[(i * _n_ineq) + j] += (_rho_agg/1.e7) *( exp(-_rho_agg*((_freq[j][k]/1.e7)-(min_eigenvalue[j]/1.e7) )));
 
-                                summ_der = (-_rho_agg/1.e7)*(exp(-_rho_agg*((_freq[j][k]/1.e7)-(*min_eig/1.e7) ))) * eig_sens[j] ;
+                                nom[(i * _n_ineq) + j]       += (-_rho_agg/1.e7)*(exp(-_rho_agg*((_freq[j][k]/1.e7)-(min_eigenvalue[j]/1.e7) ))) * eig_sens[j];
 
-                                nom[(i * _n_ineq) + j] += summ_der;
-                                denom[(i * _n_ineq) + j] += summ;
+                                denom[(i * _n_ineq) + j]     += exp(-_rho_agg * ((_freq[j][k]/1.e7) - (min_eigenvalue[j]/1.e7)));
 
                         }
                             _modal_assembly->clear_base_solution(true);
@@ -1638,8 +1637,8 @@ public:  // parametric constructor
 
                 for (unsigned int i = 0; i < _n_vars; i++) {
                     for (unsigned int j = 0; j < nconv; j++) {
-                    grads[(i * _n_ineq) + j] = -_dv_scaling[i] * ((nom[(i * _n_ineq) + j] / denom[(i * _n_ineq) + j]) * (-1 / _rho_agg)
-                                                                 - 2.e-7 * min_df[j][i] )  ;
+                    grads[(i * _n_ineq) + j] = _dv_scaling[i] * (((-1 / _rho_agg)*(nom[(i * _n_ineq) + j] / denom[(i * _n_ineq) + j]) )
+                                                                 - (1.e-7 - (1/_rho_agg) * dfmin_num[(i * _n_ineq) + j]/ denom[(i * _n_ineq) + j])* min_df[j][i]   )  ;
                     }
                 }
             }
