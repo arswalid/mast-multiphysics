@@ -290,7 +290,41 @@ protected:      // protected member variables
     std::vector<libMesh::NumericVector<Real> *> _vec_of_solutions;
     Real _min_freq;
     bool _if_analysis;
-    
+
+    MAST::ConstantFieldFunction
+            *_ref_temp_f,
+            *_temp_f,
+            *_p_cav_f;
+
+    MAST::Parameter
+            *_kappa_yy ,
+            *_kappa_zz ,
+            *kappa;
+
+    MAST::ConstantFieldFunction
+            *_kappa_yy_f  ,
+            *_kappa_zz_f  ,
+            *kappa_f;
+
+    MAST::Parameter
+            *_E ,
+            *_nu ,
+            *_alpha ,
+            *_rho ;
+
+    MAST::ConstantFieldFunction
+            *_E_f ,
+            *_nu_f ,
+            *_alpha_f ,
+            *_rho_f ;
+    MAST::Parameter
+            *h_y,
+            *h_z,
+            *h;
+    MAST::ConstantFieldFunction
+            *h_y_f,
+            *h_z_f,
+            *h_f;
 public:  // parametric constructor
     StiffenedPlateThermallyStressedPistonTheorySizingOptimization(const libMesh::Parallel::Communicator &comm,
                                                                   MAST::Examples::GetPotWrapper& input) :
@@ -373,7 +407,30 @@ public:  // parametric constructor
             _if_continuation_solver(false),
             _stress_elem(nullptr),
             _if_neg_eig(false),
-            _if_analysis(false)
+            _if_analysis(false),
+            _ref_temp_f(nullptr),
+            _temp_f(nullptr),
+            _p_cav_f(nullptr),
+            _kappa_yy(nullptr)  ,
+            _kappa_zz(nullptr)  ,
+            _kappa_yy_f(nullptr)  ,
+            _kappa_zz_f(nullptr)  ,
+            kappa(nullptr),
+            kappa_f(nullptr),
+            _E(nullptr) ,
+            _nu(nullptr) ,
+            _alpha(nullptr) ,
+            _rho(nullptr) ,
+            _E_f(nullptr) ,
+            _nu_f(nullptr) ,
+            _alpha_f(nullptr) ,
+            _rho_f(nullptr) ,
+            h_y(nullptr),
+            h_z(nullptr),
+            h_y_f(nullptr),
+            h_z_f(nullptr),
+            h(nullptr),
+            h_f(nullptr)
 
 //        _thy_station_vals(nullptr),
 //        _thz_station_vals(nullptr)
@@ -485,21 +542,21 @@ public:  // parametric constructor
 
     ~StiffenedPlateThermallyStressedPistonTheorySizingOptimization() {
         
-        {
-            std::set<MAST::FunctionBase*>::iterator
-            it   = _field_functions.begin(),
-            end  = _field_functions.end();
-            for ( ; it!=end; it++)
-                delete *it;
-        }
+//        {
+//            std::set<MAST::FunctionBase*>::iterator
+//            it   = _field_functions.begin(),
+//            end  = _field_functions.end();
+//            for ( ; it!=end; it++)
+//                delete *it;
+//        }
         
-        {
-            std::map<std::string, MAST::Parameter*>::iterator
-            it   = _parameters.begin(),
-            end  = _parameters.end();
-            for ( ; it!=end; it++)
-                delete it->second;
-        }
+//        {
+//            std::map<std::string, MAST::Parameter*>::iterator
+//            it   = _parameters.begin(),
+//            end  = _parameters.end();
+//            for ( ; it!=end; it++)
+//                delete it->second;
+//        }
         
         if (_initialized) {
 
@@ -510,11 +567,38 @@ public:  // parametric constructor
             delete _T_load;
             delete _p_load;
 
+            delete  _ref_temp_f;
+            delete _temp_f;
+            delete _p_cav_f;
+
             delete _dirichlet_bottom;
             delete _dirichlet_right;
             delete _dirichlet_top;
             delete _dirichlet_left;
 
+            delete _kappa_yy  ;
+            delete       _kappa_zz ;
+            delete       _kappa_yy_f;
+            delete       _kappa_zz_f;
+            delete kappa;
+            delete kappa_f;
+
+            delete h_y;
+            delete h_z;
+            delete h_y_f;
+            delete h_z_f;
+            delete h;
+            delete h_f;
+
+
+            delete _E ,
+            delete _nu ;
+            delete _alpha  ;
+            delete _rho  ;
+            delete _E_f  ;
+            delete _nu_f ;
+            delete _alpha_f  ;
+            delete _rho_f ;
 
             delete _hoff_plate_f;
 
@@ -530,7 +614,12 @@ public:  // parametric constructor
             delete _weight;
 
             delete _nonlinear_assembly;
-            //delete _modal_assembly;
+            delete _nonlinear_elem_ops;
+            delete _modal_assembly;
+            delete _modal_elem_ops;
+            delete _stress_assembly;
+            delete _stress_elem;
+
             delete _fsi_assembly;
 
             // delete the basis vectors
@@ -539,6 +628,7 @@ public:  // parametric constructor
                     delete _basis[i];
 
             delete _eq_sys;
+//            delete _sys;
             delete _mesh;
 
             delete _discipline;
@@ -546,7 +636,7 @@ public:  // parametric constructor
             
 
 
-            //delete _flutter_solver;
+            delete _flutter_solver;
             delete _piston_bc;
 
             delete _nsp;
@@ -562,11 +652,16 @@ public:  // parametric constructor
                 _outputs.clear();
             }
 
+            {
+                std::vector<libMesh::NumericVector<Real> *>::iterator
+                        it = _vec_of_solutions.begin(),
+                        end = _vec_of_solutions.end();
+                for (; it != end; it++) delete *it;
 
-            for (int i = 0 ; i < _vec_of_solutions.size(); i++) {
-                std::stringstream sol_iter; sol_iter << "sol_iter_" << i;
-                _sys->remove_vector(sol_iter.str());
+                _vec_of_solutions.clear();
+
             }
+
         }
     }
 
@@ -753,10 +848,10 @@ public:  // parametric constructor
         Real
         kappa_val = _input("kappa", "shear correction factor",  5./6.);
         
-        MAST::Parameter
-        *kappa    = new MAST::Parameter("kappa", kappa_val);
-        MAST::ConstantFieldFunction
-        *kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
+
+        kappa    = new MAST::Parameter("kappa", kappa_val);
+
+        kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
 
         _parameters[kappa->name()]    = kappa;
         _field_functions.insert(kappa_f);
@@ -771,11 +866,11 @@ public:  // parametric constructor
             
             
                 
-            MAST::Parameter
-                    *h        = new MAST::Parameter(oss.str(), _input("thickness", "", 0.002));
 
-            MAST::ConstantFieldFunction
-                    *h_f      = new MAST::ConstantFieldFunction(oss.str(), *h);
+                    h        = new MAST::Parameter(oss.str(), _input("thickness", "", 0.002));
+
+
+                    h_f      = new MAST::ConstantFieldFunction(oss.str(), *h);
             
             _parameters[    h->name()]    = h;
             _field_functions.insert(h_f);
@@ -829,37 +924,37 @@ public:  // parametric constructor
         alpha_val = _input("alpha", "", 2.5e-5),
         rho_val   = _input("rho", "", 2700.0);
         
-        MAST::Parameter
-        *E = new MAST::Parameter("E", Eval),
-        *nu = new MAST::Parameter("nu", nu_val),
-        *alpha = new MAST::Parameter("alpha", alpha_val),
-        *rho = new MAST::Parameter("rho", rho_val);
 
-        MAST::ConstantFieldFunction
-        *E_f = new MAST::ConstantFieldFunction("E", *E),
-        *nu_f = new MAST::ConstantFieldFunction("nu", *nu),
-        *alpha_f = new MAST::ConstantFieldFunction("alpha_expansion", *alpha),
-        *rho_f = new MAST::ConstantFieldFunction("rho", *rho);
+        _E = new MAST::Parameter("E", Eval);
+        _nu = new MAST::Parameter("nu", nu_val);
+        _alpha = new MAST::Parameter("alpha", alpha_val);
+        _rho = new MAST::Parameter("rho", rho_val);
+
+
+        _E_f = new MAST::ConstantFieldFunction("E", *_E);
+        _nu_f = new MAST::ConstantFieldFunction("nu", *_nu);
+        _alpha_f = new MAST::ConstantFieldFunction("alpha_expansion", *_alpha);
+        _rho_f = new MAST::ConstantFieldFunction("rho", *_rho);
 
         
-        _parameters[   E->name()] =  E;
-        _parameters[   nu->name()] =  nu;
-        _parameters[alpha->name()] =  alpha;
-        _parameters[  rho->name()] =  rho;
+        _parameters[   _E->name()] =  _E;
+        _parameters[   _nu->name()] =  _nu;
+        _parameters[_alpha->name()] =  _alpha;
+        _parameters[  _rho->name()] =  _rho;
         
-        _field_functions.insert(E_f);
-        _field_functions.insert(nu_f);
-        _field_functions.insert(alpha_f);
-        _field_functions.insert(rho_f);
+        _field_functions.insert(_E_f);
+        _field_functions.insert(_nu_f);
+        _field_functions.insert(_alpha_f);
+        _field_functions.insert(_rho_f);
         
         // create the material property card
         _m_card = new MAST::IsotropicMaterialPropertyCard;
 
         // add the material properties to the card
-        _m_card->add(*E_f);
-        _m_card->add(*nu_f);
-        _m_card->add(*rho_f);
-        _m_card->add(*alpha_f);
+        _m_card->add(*_E_f);
+        _m_card->add(*_nu_f);
+        _m_card->add(*_rho_f);
+        _m_card->add(*_alpha_f);
 
     }
 
@@ -875,19 +970,19 @@ public:  // parametric constructor
         _hzoff_stiff_f.resize(_n_stiff);
         _p_card_stiff.resize(_n_stiff);
         // addition of kappa to property card
-        MAST::Parameter
-                *kappa_yy = new MAST::Parameter("kappa_yy", 5./6.),
-                *kappa_zz = new MAST::Parameter("kappa_zz", 5./6.);
 
-        MAST::ConstantFieldFunction
-                *kappa_yy_f  = new MAST::ConstantFieldFunction("Kappayy", *kappa_yy),
-                *kappa_zz_f  = new MAST::ConstantFieldFunction("Kappazz", *kappa_zz);
+        _kappa_yy = new MAST::Parameter("kappa_yy", 5./6.);
+        _kappa_zz = new MAST::Parameter("kappa_zz", 5./6.);
 
-        _parameters[  kappa_yy->name()] = kappa_yy;
-        _parameters[  kappa_zz->name()] = kappa_zz;
 
-        _field_functions.insert(kappa_yy_f);
-        _field_functions.insert(kappa_yy_f);
+        _kappa_yy_f  = new MAST::ConstantFieldFunction("Kappayy", *_kappa_yy);
+        _kappa_zz_f  = new MAST::ConstantFieldFunction("Kappazz", *_kappa_zz);
+
+        _parameters[  _kappa_yy->name()] = _kappa_yy;
+        _parameters[  _kappa_zz->name()] = _kappa_zz;
+
+        _field_functions.insert(_kappa_yy_f);
+        _field_functions.insert(_kappa_yy_f);
 
         for (unsigned int i = 0; i < _n_stiff; i++) {
 
@@ -901,13 +996,13 @@ public:  // parametric constructor
                 // now we need a parameter that defines the thickness at the
                 // specified station and a constant function that defines the
                 // field function at that location.
-                MAST::Parameter
-                        *h_y = new MAST::Parameter(ossy.str(), _input("thickness_stiff_y", "", 0.002)),
-                        *h_z = new MAST::Parameter(ossz.str(), _input("thickness_stiff_z", "", 0.002));
 
-                MAST::ConstantFieldFunction
-                        *h_y_f = new MAST::ConstantFieldFunction(ossy.str(), *h_y),
-                        *h_z_f = new MAST::ConstantFieldFunction(ossz.str(), *h_z);
+                        h_y = new MAST::Parameter(ossy.str(), _input("thickness_stiff_y", "", 0.002));
+                        h_z = new MAST::Parameter(ossz.str(), _input("thickness_stiff_z", "", 0.002));
+
+
+                        h_y_f = new MAST::ConstantFieldFunction(ossy.str(), *h_y);
+                        h_z_f = new MAST::ConstantFieldFunction(ossz.str(), *h_z);
 
                 _parameters[  h_y->name()] = h_y;
                 _parameters[  h_z->name()] = h_z;
@@ -960,8 +1055,8 @@ public:  // parametric constructor
             _p_card_stiff[i]->add(*_hzoff_stiff_f[i]);
             _p_card_stiff[i]->add(*_thyoff_stiff_f);
             _p_card_stiff[i]->y_vector() = orientation;
-            _p_card_stiff[i]->add(*kappa_yy_f);
-            _p_card_stiff[i]->add(*kappa_zz_f);
+            _p_card_stiff[i]->add(*_kappa_yy_f);
+            _p_card_stiff[i]->add(*_kappa_zz_f);
 
             // tell the section property about the material property
             _p_card_stiff[i]->set_material(*_m_card);
@@ -1010,21 +1105,14 @@ public:  // parametric constructor
         // create the temperature load
         // create the property functions and add them to the
 
-        MAST::ConstantFieldFunction
-                *ref_temp_f,
-                *temp_f,
-                *p_cav_f;
-
-
-
         _p_cav = new MAST::Parameter("p_cav", _input("p_cav", "", -300.));
-        p_cav_f = new MAST::ConstantFieldFunction("pressure", *_p_cav);
+        _p_cav_f = new MAST::ConstantFieldFunction("pressure", *_p_cav);
 
         _zero = new MAST::Parameter("zero", 0.);
 
-        ref_temp_f = new MAST::ConstantFieldFunction("ref_temperature", *_zero);
+        _ref_temp_f = new MAST::ConstantFieldFunction("ref_temperature", *_zero);
         _temp       = new MAST::Parameter("temperature", _input("temp", "", 10.));
-        temp_f     = new MAST::ConstantFieldFunction("temperature", *_temp);
+        _temp_f     = new MAST::ConstantFieldFunction("temperature", *_temp);
 
 
             // initialize the load
@@ -1032,8 +1120,8 @@ public:  // parametric constructor
 
 
         _T_load = new MAST::BoundaryConditionBase(MAST::TEMPERATURE);
-        _T_load->add(*temp_f);
-        _T_load->add(*ref_temp_f);
+        _T_load->add(*_temp_f);
+        _T_load->add(*_ref_temp_f);
 
         if(!_if_continuation_solver)
             _T_load->add(*_jac_scaling);
@@ -1045,7 +1133,7 @@ public:  // parametric constructor
 
         // pressure load
         _p_load = new MAST::BoundaryConditionBase(MAST::SURFACE_PRESSURE);
-        _p_load->add(*p_cav_f);
+        _p_load->add(*_p_cav_f);
         _discipline->add_volume_load(0, *_p_load);          // for the panel
     }
 
@@ -1184,8 +1272,8 @@ public:  // parametric constructor
         // steady state solution
 
         _freq.resize(_n_eig);
-        for (int i = 0; i<_n_eig; i++)
-            _freq[i] = std::vector<Real> (1,0);
+        for (int i = 0; i < _n_eig; i++)
+            _freq[i] = std::vector<Real>(1, 0);
 
 
         StiffenedPlateSteadySolverInterface steady_solve(*this,
@@ -1197,12 +1285,11 @@ public:  // parametric constructor
             if (!_if_continuation_solver) {
                 libMesh::out << "** Steady state solution w/ Newton raphson solver **" << std::endl;
                 _if_neg_eig = false;
-            }
-            else {
+            } else {
                 libMesh::out << "** Steady state solution w/ continuation solver **" << std::endl;
                 _if_neg_eig = false;
             }
-        } else{
+        } else {
             libMesh::out << "** Steady state solution w/ Newton raphson solver **" << std::endl;
         }
 
@@ -1211,7 +1298,7 @@ public:  // parametric constructor
         // for this example the flag will be true if max itrs are reached
         if (_if_neg_eig) {
             obj = 1.e10;
-            for (unsigned int i=0; i<_n_ineq; i++)
+            for (unsigned int i = 0; i < _n_ineq; i++)
                 fvals[i] = 1.e10;
             return;
         }
@@ -1246,8 +1333,8 @@ public:  // parametric constructor
         _modal_assembly->set_discipline_and_system(*_discipline, *_structural_sys); // modf_w
         _modal_assembly->set_base_solution(steady_sol_wo_aero);
         _modal_elem_ops->set_discipline_and_system(*_discipline, *_structural_sys);
-        _sys->eigen_solver->set_position_of_spectrum( libMesh::LARGEST_MAGNITUDE);
-        _sys->eigenproblem_solve( *_modal_elem_ops, *_modal_assembly);
+        _sys->eigen_solver->set_position_of_spectrum(libMesh::LARGEST_MAGNITUDE);
+        _sys->eigenproblem_solve(*_modal_elem_ops, *_modal_assembly);
         _modal_assembly->clear_base_solution();
         _modal_assembly->clear_discipline_and_system();
         _modal_elem_ops->clear_discipline_and_system();
@@ -1292,7 +1379,7 @@ public:  // parametric constructor
                     << re << std::endl;
 
             eig_vals[i] = re;
-            _freq[i][_freq[i].size()-1] = re;
+            _freq[i][_freq[i].size() - 1] = re;
 
             // keep the flag true or change to false
             if_all_eig_positive = (if_all_eig_positive && (re > 0.)) ? true : false;
@@ -1332,10 +1419,10 @@ public:  // parametric constructor
         //////////////////////////////////////////////////////////////////////
         if (if_write_output) {
 
-            _stress_elem->set_aggregation_coefficients(_p_val,1.,_vm_rho,_stress_limit);
+            _stress_elem->set_aggregation_coefficients(_p_val, 1., _vm_rho, _stress_limit);
             _stress_elem->set_participating_elements_to_all();
-            _stress_elem->set_discipline_and_system(*_discipline,*_structural_sys);
-            _stress_assembly->set_discipline_and_system(*_discipline,*_structural_sys);
+            _stress_elem->set_discipline_and_system(*_discipline, *_structural_sys);
+            _stress_assembly->set_discipline_and_system(*_discipline, *_structural_sys);
             _stress_assembly->update_stress_strain_data(*_stress_elem, steady_sol_wo_aero);
 
             libMesh::out << "Writing output to : output.exo" << std::endl;
@@ -1362,9 +1449,9 @@ public:  // parametric constructor
         _nonlinear_assembly->set_discipline_and_system(*_discipline, *_structural_sys);
 
         std::unique_ptr<libMesh::NumericVector<Real>>
-                    localized_sol(_nonlinear_assembly->build_localized_vector(*_sys, steady_sol_wo_aero).release());
+                localized_sol(_nonlinear_assembly->build_localized_vector(*_sys, steady_sol_wo_aero).release());
 
-        for (int i=0; i < _mesh->n_local_elem() ; i++){
+        for (int i = 0; i < _mesh->n_local_elem(); i++) {
             _nonlinear_assembly->calculate_output(*localized_sol, false, *_outputs[i]);
         }
         _nonlinear_assembly->clear_discipline_and_system();
@@ -1387,31 +1474,43 @@ public:  // parametric constructor
 
         // copy the element von Mises stress values as the functions
         for (unsigned int i = 0; i < _mesh->n_local_elem(); i++)
-                        fvals[_n_eig + 1 + _prev_elems[_communicator.rank()] + i ] =
-                                        -1. + _outputs[i]->output_total()/_stress_limit;
-                
+            fvals[_n_eig + 1 + _prev_elems[_communicator.rank()] + i] =
+                    -1. + _outputs[i]->output_total() / _stress_limit;
+
         // Each processor only contributes to the local elements and all others remain zero.
         // We sum the stress constraints across procesors so that all processors have the
         // same stress constraint values. We do this before setting the eigenvlaue constraints
         // since those are set on all ranks.
-           _communicator.sum(fvals);
-        
+        _communicator.sum(fvals);
+
         //////////////////////////////////////////////////////////////////////
         // evaluate the eigenvalue constraint
         //////////////////////////////////////////////////////////////////////
-        Real _rho_agg = _input("rho_agg", "rho for aggregation",500.);
+        Real _rho_agg = _input("rho_agg", "rho for aggregation", 100.),
+                scaling_fac = _input("scaling_fac", "scaling fac for eigs", 1.e0);
+
         if (nconv) {
             // set the eigenvalue constraints  -eig <= 0. scale
             // by an arbitrary 1/1.e7 factor
-            for (unsigned int i = 0; i < nconv; i++){
-                auto min_eig  = std::min_element(_freq[i].begin(),_freq[i].end());
+            for (unsigned int i = 0; i < nconv; i++) {
+                auto min_eig = std::min_element(_freq[i].begin(), _freq[i].end());
                 Real summ = 0;
-                for (int j=0 ; j < _freq[i].size();j++ ){
-                    summ += exp(-_rho_agg * ((_freq[i][j]/1.e7) - (*min_eig/1.e7)));
+                for (int j = 0; j < _freq[i].size(); j++) {
+                    summ += exp(-_rho_agg * ((_freq[i][j] / scaling_fac) - (*min_eig / scaling_fac)));
                 }
-                fvals[i] = (_min_freq/1.e7) - (*min_eig/1.e7) - (1/_rho_agg)*log(summ)    ;        //-eig_vals[i] / 1.e7;
-                 }
+                fvals[i] = (_min_freq / scaling_fac) - (*min_eig / scaling_fac) + (1 / _rho_agg) * log(summ);
+
+                // check if minimum value is satisfied
+                if ((abs((*min_eig / scaling_fac) - ((*min_eig / scaling_fac) - (1 / _rho_agg) * log(summ)))/abs(*min_eig / scaling_fac)) > 1.e-2) {
+
+                    libMesh::out << "aggregated minimum is incorrect" << std::endl;
+                    libMesh::out << "relative error is:  "<< (abs((*min_eig / scaling_fac) - ((*min_eig / scaling_fac) - (1 / _rho_agg) * log(summ)))
+                                                             /abs( *min_eig / scaling_fac)) << std::endl;
+                    libmesh_error();
+                }
+            }
         }
+
 
         //////////////////////////////////////////////////////////////////////
         // evaluate the flutter constraint
@@ -1548,7 +1647,7 @@ public:  // parametric constructor
                     min_eigenvalue[j] = *min_eig;
 
                     for (int k=0 ; k < _freq[0].size(); k++ ) {
-                        denom[j] += exp(-_rho_agg * ((_freq[j][k] / 1.e7) - (min_eigenvalue[j] / 1.e7)));
+                        denom[j] += exp(-_rho_agg * ((_freq[j][k] / scaling_fac) - (min_eigenvalue[j] / scaling_fac)));
                     }
                 }
 
@@ -1581,7 +1680,7 @@ public:  // parametric constructor
 
 
                             for (unsigned int j = 0; j < nconv; j++) {
-                                nom[(i * _n_ineq) + j]  += (-_rho_agg/1.e7)*(exp(-_rho_agg*((_freq[j][k]/1.e7)-(min_eigenvalue[j]/1.e7) ))) * eig_sens[j] / denom[j];
+                                nom[(i * _n_ineq) + j]  += (1/scaling_fac)*(exp(-_rho_agg*((_freq[j][k]/scaling_fac)-(min_eigenvalue[j]/scaling_fac) ))) * eig_sens[j] / denom[j];
                         }
                             _modal_assembly->clear_base_solution(true);
                             _modal_assembly->clear_base_solution();
@@ -1591,7 +1690,7 @@ public:  // parametric constructor
 
                 for (unsigned int i = 0; i < _n_vars; i++) {
                     for (unsigned int j = 0; j < nconv; j++) {
-                    grads[(i * _n_ineq) + j] += _dv_scaling[i] * (1 / _rho_agg)* nom[(i * _n_ineq) + j] ;
+                    grads[(i * _n_ineq) + j] = -_dv_scaling[i] *  nom[(i * _n_ineq) + j] ;
                     }
                 }
             }
@@ -1604,16 +1703,6 @@ public:  // parametric constructor
             _modal_assembly->clear_discipline_and_system();
             _modal_elem_ops->clear_discipline_and_system();
 
-
-            std::ofstream sens_vals;  // text file for eigenvalues
-            sens_vals.open("sens_vals.txt", std::ofstream::out);
-
-            for (unsigned int i = 0; i < _n_vars; i++) {
-                for (unsigned int j = 0; j < (_n_eq + _n_ineq); j++) {
-                    sens_vals << std::setw(25) << grads[(i * _n_ineq) + j];
-                }
-                sens_vals << std::endl;
-            }
 
             libMesh::out << "** sensitivity analysis DONE **" << std::endl;
 
@@ -1747,6 +1836,11 @@ public:  // parametric constructor
             if (_if_clear_vector_on_exit)
                 _obj._sys->remove_vector("base_solution");
             delete writer;
+
+            for (int i = 0 ; i < _obj._vec_of_solutions.size(); i++) {
+                std::stringstream sol_iter; sol_iter << "sol_iter_" << i;
+                _obj._sys->remove_vector(sol_iter.str());
+            }
         }
 
 
@@ -2247,125 +2341,6 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-
-
-
-
-//void
-//stiffened_plate_thermally_stressed_piston_theory_flutter_optim_obj(int*    mode,
-//                                                                   int*    n,
-//                                                                   double* x,
-//                                                                   double* f,
-//                                                                   double* g,
-//                                                                   int*    nstate) {
-//
-//
-//    // make sure that the global variable has been setup
-//    libmesh_assert(__my_func_eval);
-//
-//    // initialize the local variables
-//    Real
-//            obj = 0.;
-//
-//    unsigned int
-//            n_vars  =  __my_func_eval->n_vars(),
-//            n_con   =  __my_func_eval->n_eq()+__my_func_eval->n_ineq();
-//
-//    libmesh_assert_equal_to(*n, n_vars);
-//
-//    std::vector<Real>
-//            dvars   (*n,    0.),
-//            obj_grad(*n,    0.),
-//            fvals   (n_con, 0.),
-//            grads   (0);
-//
-//    std::vector<bool>
-//            eval_grads(n_con);
-//    std::fill(eval_grads.begin(), eval_grads.end(), false);
-//
-//    // copy the dvars
-//    for (unsigned int i=0; i<n_vars; i++)
-//        dvars[i] = x[i];
-//
-//
-//    __my_func_eval->evaluate(dvars,
-//                             obj,
-//                             true,       // request the derivatives of obj
-//                             obj_grad,
-//                             fvals,
-//                             eval_grads,
-//                             grads);
-//
-//
-//    // now copy them back as necessary
-//    *f  = obj;
-//    for (unsigned int i=0; i<n_vars; i++)
-//        g[i] = obj_grad[i];
-//}
-//
-//
-//void
-//stiffened_plate_thermally_stressed_piston_theory_flutter_optim_con(int*    mode,
-//                                                                   int*    ncnln,
-//                                                                   int*    n,
-//                                                                   int*    ldJ,
-//                                                                   int*    needc,
-//                                                                   double* x,
-//                                                                   double* c,
-//                                                                   double* cJac,
-//                                                                   int*    nstate) {
-//
-//
-//    // make sure that the global variable has been setup
-//    libmesh_assert(__my_func_eval);
-//
-//    // initialize the local variables
-//    Real
-//            obj = 0.;
-//
-//    unsigned int
-//            n_vars  =  __my_func_eval->n_vars(),
-//            n_con   =  __my_func_eval->n_eq()+__my_func_eval->n_ineq();
-//
-//    libmesh_assert_equal_to(    *n, n_vars);
-//    libmesh_assert_equal_to(*ncnln, n_con);
-//
-//    std::vector<Real>
-//            dvars   (*n,    0.),
-//            obj_grad(*n,    0.),
-//            fvals   (n_con, 0.),
-//            grads   (n_vars*n_con, 0.);
-//
-//    std::vector<bool>
-//            eval_grads(n_con);
-//    std::fill(eval_grads.begin(), eval_grads.end(), true);
-//
-//    // copy the dvars
-//    for (unsigned int i=0; i<n_vars; i++)
-//        dvars[i] = x[i];
-//
-//
-//    __my_func_eval->evaluate(dvars,
-//                             obj,
-//                             true,       // request the derivatives of obj
-//                             obj_grad,
-//                             fvals,
-//                             eval_grads,
-//                             grads);
-//
-//
-//    // now copy them back as necessary
-//
-//    // first the constraint functions
-//    for (unsigned int i=0; i<n_con; i++)
-//        c[i] = fvals[i];
-//
-//    // next, the constraint gradients
-//    for (unsigned int i=0; i<n_con*n_vars; i++)
-//        cJac[i] = grads[i];
-//
-//
-//}
 
 
 
