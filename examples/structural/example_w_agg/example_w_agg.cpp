@@ -355,8 +355,8 @@ public:  // parametric constructor
             _T_load(nullptr),
             _p_load(nullptr),
             _piston_bc(nullptr),
-            
-            
+
+            _th_plate_f(nullptr),
             
             _length(0.),
             _width(0.),
@@ -373,7 +373,8 @@ public:  // parametric constructor
             _mach(nullptr),
             _rho_air(nullptr),
             _gamma_air(nullptr),
-            
+
+
             
             _velocity_f(nullptr),
             
@@ -542,23 +543,25 @@ public:  // parametric constructor
 
     ~StiffenedPlateThermallyStressedPistonTheorySizingOptimization() {
         
-//        {
-//            std::set<MAST::FunctionBase*>::iterator
-//            it   = _field_functions.begin(),
-//            end  = _field_functions.end();
-//            for ( ; it!=end; it++)
-//                delete *it;
-//        }
-        
-//        {
-//            std::map<std::string, MAST::Parameter*>::iterator
-//            it   = _parameters.begin(),
-//            end  = _parameters.end();
-//            for ( ; it!=end; it++)
-//                delete it->second;
-//        }
+
         
         if (_initialized) {
+
+                    {
+            std::set<MAST::FunctionBase*>::iterator
+            it   = _field_functions.begin(),
+            end  = _field_functions.end();
+            for ( ; it!=end; it++)
+                delete *it;
+        }
+
+        {
+            std::map<std::string, MAST::Parameter*>::iterator
+            it   = _parameters.begin(),
+            end  = _parameters.end();
+            for ( ; it!=end; it++)
+                delete it->second;
+        }
 
             delete _m_card;
             delete _p_card_plate;
@@ -567,40 +570,14 @@ public:  // parametric constructor
             delete _T_load;
             delete _p_load;
 
-            delete  _ref_temp_f;
-            delete _temp_f;
-            delete _p_cav_f;
-
             delete _dirichlet_bottom;
             delete _dirichlet_right;
             delete _dirichlet_top;
             delete _dirichlet_left;
 
-            delete _kappa_yy  ;
-            delete       _kappa_zz ;
-            delete       _kappa_yy_f;
-            delete       _kappa_zz_f;
-            delete kappa;
-            delete kappa_f;
-
-            delete h_y;
-            delete h_z;
-            delete h_y_f;
-            delete h_z_f;
-            delete h;
-            delete h_f;
-
-
-            delete _E ,
-            delete _nu ;
-            delete _alpha  ;
-            delete _rho  ;
-            delete _E_f  ;
-            delete _nu_f ;
-            delete _alpha_f  ;
-            delete _rho_f ;
-
             delete _hoff_plate_f;
+
+            delete _th_plate_f;
 
             delete _hyoff_stiff_f;
             for (unsigned int i = 0; i < _n_stiff; i++) delete _hzoff_stiff_f[i];
@@ -608,8 +585,6 @@ public:  // parametric constructor
             for (unsigned int i = 0; i < _n_stiff; i++) delete _thz_stiff_f[i];
 
             delete _jac_scaling;
-
-            delete _zero;
 
             delete _weight;
 
@@ -652,15 +627,7 @@ public:  // parametric constructor
                 _outputs.clear();
             }
 
-            {
-                std::vector<libMesh::NumericVector<Real> *>::iterator
-                        it = _vec_of_solutions.begin(),
-                        end = _vec_of_solutions.end();
-                for (; it != end; it++) delete *it;
 
-                _vec_of_solutions.clear();
-
-            }
 
         }
     }
@@ -974,7 +941,6 @@ public:  // parametric constructor
         _kappa_yy = new MAST::Parameter("kappa_yy", 5./6.);
         _kappa_zz = new MAST::Parameter("kappa_zz", 5./6.);
 
-
         _kappa_yy_f  = new MAST::ConstantFieldFunction("Kappayy", *_kappa_yy);
         _kappa_zz_f  = new MAST::ConstantFieldFunction("Kappazz", *_kappa_zz);
 
@@ -1087,6 +1053,18 @@ public:  // parametric constructor
         _rho_air_f = new MAST::ConstantFieldFunction("rho", *_rho_air);
         _gamma_air_f = new MAST::ConstantFieldFunction("gamma", *_gamma_air);
 
+        _parameters[  _velocity->name()] = _velocity;
+        _parameters[  _mach->name()]     = _mach;
+        _parameters[  _rho_air->name()]  = _rho_air;
+        _parameters[  _gamma_air->name()]= _gamma_air;
+
+        _field_functions.insert(_velocity_f);
+        _field_functions.insert(_mach_f);
+        _field_functions.insert(_mach_f);
+        _field_functions.insert(_mach_f);
+
+
+
         // now initialize the piston theory boundary conditions
         RealVectorX vel = RealVectorX::Zero(3);
         vel(0) = 1.;  // flow along the x-axis
@@ -1114,9 +1092,16 @@ public:  // parametric constructor
         _temp       = new MAST::Parameter("temperature", _input("temp", "", 10.));
         _temp_f     = new MAST::ConstantFieldFunction("temperature", *_temp);
 
+        _parameters[  _p_cav->name()] = _p_cav;
+        _parameters[  _zero->name()]     = _zero;
+        _parameters[  _temp->name()]  = _temp;
 
-            // initialize the load
-            _jac_scaling = new MAST::Examples::ThermalJacobianScaling;
+        _field_functions.insert(_p_cav_f);
+        _field_functions.insert(_ref_temp_f);
+        _field_functions.insert(_temp_f);
+
+        // initialize the load
+        _jac_scaling = new MAST::Examples::ThermalJacobianScaling;
 
 
         _T_load = new MAST::BoundaryConditionBase(MAST::TEMPERATURE);
@@ -1708,6 +1693,16 @@ public:  // parametric constructor
 
             STOP_LOG("sensitivity calculation()","sensitivity calculation")
         }
+
+
+            std::vector<libMesh::NumericVector<Real> *>::iterator
+                    it = _vec_of_solutions.begin(),
+                    end = _vec_of_solutions.end();
+            for (; it != end; it++) delete *it;
+
+            _vec_of_solutions.clear();
+
+
     }
 
     void clear_stresss() {
