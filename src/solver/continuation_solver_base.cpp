@@ -165,8 +165,7 @@ MAST::ContinuationSolverBase::solve()  {
     << std::setw(20) << "Terminated"  << std::endl;
 
     if ((norm/norm0) > 1.e-1) {
-        libMesh::out << "residual didn't converge" << std::endl;
-        libmesh_error();
+        libMesh::out << "residual didn't converge at this step" << std::endl;
     }
 
     if (iter) {

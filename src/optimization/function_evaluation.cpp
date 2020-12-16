@@ -393,13 +393,14 @@ MAST::FunctionEvaluation::verify_gradients(const std::vector<Real>& dvars) {
             << std::setw(30) << grads_fd[i*(_n_eq+_n_ineq)+j];
 
             if (fabs(grads_fd[i*(_n_eq+_n_ineq)+j]) > sqrt(tol)){
-            if (fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]) > tol)
-                {
-                libMesh::out << " : Mismatched sensitivity   relative error: " << fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]);
-                accurate_sens = false;
-                }
+                if (fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]) > tol)
+                    {
+                    libMesh::out << " : Mismatched sensitivity   relative error: " << fabs((grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j])/grads[i*(_n_eq+_n_ineq)+j]);
+                    accurate_sens = false;
+                    }
             }
-            else if (fabs(grads_fd[i*(_n_eq+_n_ineq)+j]) < sqrt(tol)){
+
+            if (fabs(grads_fd[i*(_n_eq+_n_ineq)+j]) < sqrt(tol)){
                 if (fabs(grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j]) > tol)
                 {
                     libMesh::out << " : Mismatched sensitivity absolute error: " << fabs(grads[i*(_n_eq+_n_ineq)+j] - grads_fd[i*(_n_eq+_n_ineq)+j]);
