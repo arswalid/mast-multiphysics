@@ -1,5 +1,5 @@
 diff --git a/examples/structural/example_w_agg/example_w_agg.cpp b/examples/structural/example_w_agg/example_w_agg.cpp
-index 3d1cdf6..9c156c1 100755
+index 3d1cdf6..e57b9c1 100755
 --- a/examples/structural/example_w_agg/example_w_agg.cpp
 +++ b/examples/structural/example_w_agg/example_w_agg.cpp
 @@ -735,7 +735,7 @@ public:  // parametric constructor
@@ -11,13 +11,15 @@ index 3d1cdf6..9c156c1 100755
              std::ostringstream oss;
              oss << "h_" << i;
  
-@@ -754,8 +754,15 @@ public:  // parametric constructor
+@@ -754,8 +754,17 @@ public:  // parametric constructor
              _th_station_functions_plate[i] = h_f;
  
              _problem_parameters[i] = h;
 +
 +            if (i < (_n_dv_stations_x/2)) {
 +                // symmetry inforcement
++                _thy_station_vals.insert(std::pair<Real, MAST::FieldFunction<Real> *>
++                                                 ((_n_dv_stations_x - i - 1) * _dx, h_f));
 +                _problem_parameters[_n_dv_stations_x - i - 1] = h;
 +            }
          }
@@ -27,7 +29,7 @@ index 3d1cdf6..9c156c1 100755
          // now create the h_y function and give it to the property card
          _th_plate_f = new MAST::MultilinearInterpolation("h", _thy_station_vals);
          _thy_station_vals.clear();
-@@ -851,7 +858,7 @@ public:  // parametric constructor
+@@ -851,7 +860,7 @@ public:  // parametric constructor
  
              // first define the thickness station parameters and the thickness
              // field function
@@ -36,13 +38,16 @@ index 3d1cdf6..9c156c1 100755
                  std::ostringstream ossy, ossz;
                  ossy << "h_y_" << j << "_stiff_" << i;
                  ossz << "h_z_" << j << "_stiff_" << i;
-@@ -884,6 +891,13 @@ public:  // parametric constructor
+@@ -884,6 +893,16 @@ public:  // parametric constructor
                  //_discipline->add_parameter(*h_z);
                  _problem_parameters[(2 * i + 1) * _n_dv_stations_x + j] = h_y;
                  _problem_parameters[(2 * i + 2) * _n_dv_stations_x + j] = h_z;
 +
 +                if (j < (_n_dv_stations_x/2)) {
 +                    // symmetry inforcement
++                    _thy_station_vals_stiff.insert(std::pair<Real, MAST::FieldFunction<Real> *> ((_n_dv_stations_x - j - 1) * _dx, h_y_f));
++                    _thz_station_vals_stiff.insert(std::pair<Real, MAST::FieldFunction<Real> *> ((_n_dv_stations_x - j - 1) * _dx, h_z_f));
++
 +                    _problem_parameters[(2 * i + 2) * _n_dv_stations_x - j - 1 ] = h_y;
 +                    _problem_parameters[(2 * i + 3) * _n_dv_stations_x - j - 1] = h_z;
 +                }
