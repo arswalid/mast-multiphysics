@@ -1,0 +1,109 @@
+diff --git a/examples/structural/example_w/example_w.cpp b/examples/structural/example_w/example_w.cpp
+index 2e57edd..2e3fba9 100755
+--- a/examples/structural/example_w/example_w.cpp
++++ b/examples/structural/example_w/example_w.cpp
+@@ -1664,17 +1664,17 @@ public:  // parametric constructor
+                 // std::cout << *nd << std::endl;
+ 
+                 Real
+-                        max_temp = (*_obj._temp)(),
+-                        dt =1;
++                        max_p = (*_obj._p_cav)(),
++                        dp =1;
+ 
+-                Real init_step      = _obj._input("init_step", "init_temperature  for c-s",  (*_obj._temp)()/50);
+-                (*_obj._temp)() = init_step;
++                Real init_step      = _obj._input("init_step", "init mechanical load  for c-s",  (*_obj._p_cav)()/50);
++                (*_obj._p_cav)() = init_step;
+ 
+                 const unsigned int
+                         dof_num = nd->dof_number(0, 2, 0);
+ 
+                 unsigned int
+-                n_temp_steps  = _obj._input( "n_temp_steps", "number of load steps for temperature increase",  1000);
++                n_temp_steps  = _obj._input( "n_temp_steps", "number of load steps for pressure increase",  1000);
+ 
+ 
+                 // write the header to the load.txt file
+@@ -1694,7 +1694,7 @@ public:  // parametric constructor
+                     out_eig.open("continuation_solver_eig.txt", std::ofstream::out);
+                     out_eig
+                             << std::setw(10) << "iter"
+-                            << std::setw(25) << "temperature"
++                            << std::setw(25) << "pressure"
+                             << std::setw(25) << "displ";
+ 
+                     for (int di = 0; di < _obj._n_eig; di++)
+@@ -1723,11 +1723,11 @@ public:  // parametric constructor
+                     // load step
+                     solver.set_assembly_and_load_parameter(*_obj._nonlinear_elem_ops,
+                                                            *_obj._nonlinear_assembly,
+-                                                           *_obj._temp);
++                                                           *_obj._p_cav);
+ 
+                     // the initial deformation direction is identified with a
+                     // unit change in temperature.
+-                    solver.initialize((*_obj._temp)());
++                    solver.initialize((*_obj._p_cav)());
+                     // with the search direction defined, we define the arc length
+                     // per load step to be a factor of 2 greater than the initial step.
+ 
+@@ -1767,7 +1767,7 @@ public:  // parametric constructor
+                             if (_obj.comm().rank() == 0) {
+                                 out_eig
+                                         << std::setw(10) << i
+-                                        << std::setw(25) << (*_obj._temp)()
++                                        << std::setw(25) << (*_obj._p_cav)()
+                                         << std::setw(25) << vec1[0];
+                             }
+ 
+@@ -1796,7 +1796,7 @@ public:  // parametric constructor
+ 
+ 
+ 
+-                        _obj._sys->time += dt;
++                        _obj._sys->time += dp;
+ //                         write the current solution to the exodus file for
+ //                         visualization
+                         try
+@@ -1820,32 +1820,32 @@ public:  // parametric constructor
+                         // and solve the system one last time and exit
+                         if (!_obj._if_analysis) {
+                             auto min_eig = std::min_element(eig_vec.begin(), eig_vec.end());
+-                            if ((*min_eig < _obj._min_allowed_eig) && ((*_obj._temp)() < max_temp)) {
++                            if ((*min_eig < _obj._min_allowed_eig) && (abs((*_obj._p_cav)()) < abs(max_p))) {
+                                 _obj._if_neg_eig = true;
+                                 libMesh::out << " negative eigenvalue found" << std::endl;
+-                                (*_obj._temp)() = max_temp;
++                                (*_obj._p_cav)() = max_p;
+                                 break;
+                             }
+                         }
+ 
+-                        if (  (*_obj._temp)() < 0.0 )   {
++                        if (  (*_obj._p_cav)() > 0.0 )   {
+                             _obj._if_neg_eig = true;
+                             libMesh::out << " Continuation solver diverged" << std::endl;
+-                            (*_obj._temp)() = max_temp;
++                            (*_obj._p_cav)() = max_p;
+                             break;
+                         }
+ 
+                         // if the temperature given by the solver is bigger than tmax
+                         // go back to tmax and solve the system one more time and exit
+-                        if ((*_obj._temp)() > max_temp) {
+-                            libMesh::out << " Final temperature reached " << std::endl;
+-                            (*_obj._temp)() = max_temp;
++                        if (abs((*_obj._p_cav)()) > abs(max_p)) {
++                            libMesh::out << " Final mechanical load reached " << std::endl;
++                            (*_obj._p_cav)() = max_p;
+                             _obj._sys->solve(*_obj._nonlinear_elem_ops,
+                                              *_obj._nonlinear_assembly);
+                             break;
+                         }
+                         if (i == (n_temp_steps-1)) {
+-                            (*_obj._temp)() = max_temp;
++                            (*_obj._p_cav)() = max_p;
+                             libMesh::out << " max number of iters reached " << std::endl;
+                             _obj._if_neg_eig = true;
+                         }
