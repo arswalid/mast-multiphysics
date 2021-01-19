@@ -1,0 +1,74 @@
+diff --git a/examples/structural/example_w/example_w.cpp b/examples/structural/example_w/example_w.cpp
+index 2e57edd..6ca3e11 100755
+--- a/examples/structural/example_w/example_w.cpp
++++ b/examples/structural/example_w/example_w.cpp
+@@ -10,6 +10,7 @@
+ #include <memory>
+ #include <iomanip>
+ #include <map>
++#include <random>
+ #include <iostream>
+ #include <math.h>
+ 
+@@ -119,6 +120,8 @@
+ //extern
+ MAST::FunctionEvaluation *__my_func_eval;
+ 
++Real random_value();
++
+ class StiffenedPlateThermallyStressedPistonTheorySizingOptimization:
+         public MAST::FunctionEvaluation{ // this class inherits from Function evaluation
+ 
+@@ -664,13 +667,13 @@ public:  // parametric constructor
+         // initialization of design variables
+         // panel design variables
+         for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
+-            _dv_init[i] = _input("dv_init", "", th / th_u, i);
++            _dv_init[i] = random_value()/_dv_scaling[i];
+         }
+         // stiffeners design variables
+         for (unsigned int j = 0; j < _n_stiff; j++) {
+             for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
+-                _dv_init[(2 * j + 1) * _n_dv_stations_x + i] = _input("dv_init", "", th_stiffy / th_u, i);
+-                _dv_init[(2 * j + 2) * _n_dv_stations_x + i] = _input("dv_init", "", th_stiffz / th_u, i);
++                _dv_init[(2 * j + 1) * _n_dv_stations_x + i] = random_value()/_dv_scaling[i];
++                _dv_init[(2 * j + 2) * _n_dv_stations_x + i] = random_value()/_dv_scaling[i];
+             }
+         }
+     }
+@@ -695,7 +698,7 @@ public:  // parametric constructor
+             // now we need a parameter that defines the thickness at the
+             // specified station and a constant function that defines the
+             // field function at that location.
+-            h        = new MAST::Parameter(oss.str(), _input("thickness", "", 0.002));
++            h        = new MAST::Parameter(oss.str(), _dv_init[i]);
+             h_f      = new MAST::ConstantFieldFunction(oss.str(), *h);
+ 
+             // add this to the thickness map
+@@ -813,8 +816,8 @@ public:  // parametric constructor
+                 // specified station and a constant function that defines the
+                 // field function at that location.
+ 
+-                h_y = new MAST::Parameter(ossy.str(), _input("thickness_stiff_y", "", 0.002));
+-                h_z = new MAST::Parameter(ossz.str(), _input("thickness_stiff_z", "", 0.002));
++                h_y = new MAST::Parameter(ossy.str(), _dv_init[(2 * i + 1) * _n_dv_stations_x + j]);
++                h_z = new MAST::Parameter(ossz.str(), _dv_init[(2 * i + 2) * _n_dv_stations_x + j]);
+ 
+                 h_y_f = new MAST::ConstantFieldFunction(ossy.str(), *h_y);
+                 h_z_f = new MAST::ConstantFieldFunction(ossz.str(), *h_z);
+@@ -1906,7 +1909,14 @@ public:  // parametric constructor
+     };
+ };
+ 
+-
++Real random_value(){
++    std::vector<Real> v = {5.e-4,1e-4,5e-3,1e-3,5e-2};
++    std::random_device random_device;
++    std::mt19937 engine{random_device()};
++    std::uniform_int_distribution<int> dist(0, v.size() - 1);
++    Real random_element = v[dist(engine)];
++    return random_element;
++}
+ 
+ //StiffenedPlateThermallyStressedPistonTheorySizingOptimization* _my_func_eval=nullptr;
+ 

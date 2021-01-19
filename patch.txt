@@ -1,3 +1,4 @@
 patch.example_w_agg  is for symmetry along x for the stations
 patch2.example_w_agg is for symmetry along x and y (stations and stiffeners)
 patch.example_w      is for switching the continuation slover parameters from T to p for a pure mechanical load
+patch2.example_w    generation of random values for the dvars
