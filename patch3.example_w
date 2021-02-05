@@ -1,0 +1,27 @@
+diff --git a/examples/structural/example_w/example_w.cpp b/examples/structural/example_w/example_w.cpp
+index 2e57edd..f172777 100755
+--- a/examples/structural/example_w/example_w.cpp
++++ b/examples/structural/example_w/example_w.cpp
+@@ -1813,21 +1813,7 @@ public:  // parametric constructor
+                             libMesh::out << " continue ... " << std::endl;
+                         }
+ 
+-
+-
+-                        // if a negative eigenvalue is detected
+-                        // change flag to true to increase obj and fvals
+-                        // and solve the system one last time and exit
+-                        if (!_obj._if_analysis) {
+-                            auto min_eig = std::min_element(eig_vec.begin(), eig_vec.end());
+-                            if ((*min_eig < _obj._min_allowed_eig) && ((*_obj._temp)() < max_temp)) {
+-                                _obj._if_neg_eig = true;
+-                                libMesh::out << " negative eigenvalue found" << std::endl;
+-                                (*_obj._temp)() = max_temp;
+-                                break;
+-                            }
+-                        }
+-
++                        // if the temperature becomes negative the cs diverged
+                         if (  (*_obj._temp)() < 0.0 )   {
+                             _obj._if_neg_eig = true;
+                             libMesh::out << " Continuation solver diverged" << std::endl;
