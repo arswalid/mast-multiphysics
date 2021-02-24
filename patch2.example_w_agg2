@@ -1,0 +1,230 @@
+diff --git a/examples/structural/example_w_agg2/example_w_agg2.cpp b/examples/structural/example_w_agg2/example_w_agg2.cpp
+index 7459f30..49be996 100755
+--- a/examples/structural/example_w_agg2/example_w_agg2.cpp
++++ b/examples/structural/example_w_agg2/example_w_agg2.cpp
+@@ -443,7 +443,7 @@ public:  // parametric constructor
+ 
+         /// now setup the optimization data
+         // number of design variables
+-        _n_vars = _n_dv_stations_x + 2 * _n_dv_stations_x * _n_stiff; // for thickness variable
++        _n_vars = (_n_dv_stations_x/2+1) + 2 * (_n_dv_stations_x/2+1)*(_n_stiff/2+1);
+ 
+         // number of equality constraints
+         _n_eq = 0;
+@@ -714,40 +714,40 @@ public:  // parametric constructor
+ 
+         // initialization of design variables
+         // panel design variables
+-        for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
++        for (unsigned int i = 0; i < (_n_dv_stations_x/2+1); i++) {
+             _dv_init[i] = _input("dv_init", "", th / th_u, i);
+         }
+         // stiffeners design variables
+-        for (unsigned int j = 0; j < _n_stiff; j++) {
+-            for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
+-                _dv_init[(2 * j + 1) * _n_dv_stations_x + i] = _input("dv_init", "", th_stiffy / th_u, i);
+-                _dv_init[(2 * j + 2) * _n_dv_stations_x + i] = _input("dv_init", "", th_stiffz / th_u, i);
++        for (unsigned int j = 0; j < (_n_stiff/2+1); j++) {
++            for (unsigned int i = 0; i < (_n_dv_stations_x/2+1); i++) {
++                _dv_init[(2 * j + 1) * (_n_dv_stations_x/2+1) + i] = _input("dv_init", "", th_stiffy / th_u, i);
++                _dv_init[(2 * j + 2) * (_n_dv_stations_x/2+1) + i] = _input("dv_init", "", th_stiffz / th_u, i);
+             }
+         }
+     }
+ 
+     void _init_thickness_variables_plate(){
+         // create the thickness variables
+-        _th_station_parameters_plate.resize(_n_dv_stations_x);
+-        _th_station_functions_plate.resize(_n_dv_stations_x);
++        _th_station_parameters_plate.resize((_n_dv_stations_x/2+1));
++        _th_station_functions_plate.resize((_n_dv_stations_x/2+1));
+ 
+         Real
+-        kappa_val = _input("kappa", "shear correction factor",  5./6.);
++                kappa_val = _input("kappa", "shear correction factor",  5./6.);
+         kappa    = new MAST::Parameter("kappa", kappa_val);
+         kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
+ 
+         _parameters[kappa->name()]    = kappa;
+         _field_functions.insert(kappa_f);
+-        
+-        for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
++
++        for (unsigned int i = 0; i < (_n_dv_stations_x/2+1); i++) {
+             std::ostringstream oss;
+             oss << "h_" << i;
+ 
+             // now we need a parameter that defines the thickness at the
+             // specified station and a constant function that defines the
+             // field function at that location.
+-             h        = new MAST::Parameter(oss.str(), _input("thickness", "", 0.002));
+-             h_f      = new MAST::ConstantFieldFunction(oss.str(), *h);
++            h        = new MAST::Parameter(oss.str(), _input("thickness", "", 0.002));
++            h_f      = new MAST::ConstantFieldFunction(oss.str(), *h);
+ 
+             // add this to the thickness map
+             _thy_station_vals.insert(std::pair<Real, MAST::FieldFunction<Real> *>
+@@ -758,8 +758,16 @@ public:  // parametric constructor
+             _th_station_functions_plate[i] = h_f;
+ 
+             _problem_parameters[i] = h;
++
++            if (i < (_n_dv_stations_x/2)) {
++                // symmetry inforcement
++                _thy_station_vals.insert(std::pair<Real, MAST::FieldFunction<Real> *>
++                                                 ((_n_dv_stations_x - i - 1) * _dx, h_f));
++            }
+         }
+ 
++
++
+         // now create the h_y function and give it to the property card
+         _th_plate_f = new MAST::MultilinearInterpolation("h", _thy_station_vals);
+         _thy_station_vals.clear();
+@@ -825,10 +833,10 @@ public:  // parametric constructor
+     void _init_thickness_variables_stiff() {
+ 
+         // store parameters and function to be deleted later
+-        _thy_station_parameters_stiff.resize(_n_dv_stations_x * _n_stiff);
+-        _thy_station_functions_stiff.resize(_n_dv_stations_x * _n_stiff);
+-        _thz_station_parameters_stiff.resize(_n_dv_stations_x * _n_stiff);
+-        _thz_station_functions_stiff.resize(_n_dv_stations_x * _n_stiff);
++        _thy_station_parameters_stiff.resize((_n_dv_stations_x/2+1) * (_n_stiff/2+1));
++        _thy_station_functions_stiff.resize((_n_dv_stations_x/2+1) * (_n_stiff/2+1));
++        _thz_station_parameters_stiff.resize((_n_dv_stations_x/2+1) * (_n_stiff/2+1));
++        _thz_station_functions_stiff.resize((_n_dv_stations_x/2+1) * (_n_stiff/2+1));
+ 
+         // store the width and height of the panel in the stiffener
+         _thy_stiff_f.resize(_n_stiff);
+@@ -851,11 +859,11 @@ public:  // parametric constructor
+         _field_functions.insert(_kappa_yy_f);
+         _field_functions.insert(_kappa_yy_f);
+ 
+-        for (unsigned int i = 0; i < _n_stiff; i++) {
++        for (unsigned int i = 0; i < (_n_stiff/2+1); i++) {
+ 
+             // first define the thickness station parameters and the thickness
+             // field function
+-            for (unsigned int j = 0; j < _n_dv_stations_x; j++) {
++            for (unsigned int j = 0; j < (_n_dv_stations_x/2+1); j++) {
+                 std::ostringstream ossy, ossz;
+                 ossy << "h_y_" << j << "_stiff_" << i;
+                 ossz << "h_z_" << j << "_stiff_" << i;
+@@ -877,23 +885,38 @@ public:  // parametric constructor
+                                                        (j * _dx, h_z_f));
+ 
+                 // add the function to the parameter set
+-                _thy_station_parameters_stiff[i * _n_dv_stations_x + j] = h_y;
+-                _thy_station_functions_stiff[i * _n_dv_stations_x + j] = h_y_f;
+-                _thz_station_parameters_stiff[i * _n_dv_stations_x + j] = h_z;
+-                _thz_station_functions_stiff[i * _n_dv_stations_x + j] = h_z_f;
++                _thy_station_parameters_stiff[i * (_n_dv_stations_x/2+1) + j] = h_y;
++                _thy_station_functions_stiff[i * (_n_dv_stations_x/2+1) + j] = h_y_f;
++                _thz_station_parameters_stiff[i * (_n_dv_stations_x/2+1) + j] = h_z;
++                _thz_station_functions_stiff[i * (_n_dv_stations_x/2+1) + j] = h_z_f;
+ 
+ 
+                 // tell the assembly system about the sensitvity parameter
+                 //_discipline->add_parameter(*h_y);
+                 //_discipline->add_parameter(*h_z);
+-                _problem_parameters[(2 * i + 1) * _n_dv_stations_x + j] = h_y;
+-                _problem_parameters[(2 * i + 2) * _n_dv_stations_x + j] = h_z;
++
++                // for stiffener 1 and 2 at stations less or equal to 7/2
++                _problem_parameters[(2 * i + 1) * (_n_dv_stations_x/2+1) + j] = h_y;
++                _problem_parameters[(2 * i + 2) * (_n_dv_stations_x/2+1) + j] = h_z;
++
++                // for stiffener 1 and 2 at stations greater than 7/2
++                if (j < (_n_dv_stations_x/2)) {
++                    // symmetry inforcement
++                    _thy_station_vals_stiff.insert(std::pair<Real, MAST::FieldFunction<Real> *> ((_n_dv_stations_x - j - 1) * _dx, h_y_f));
++                    _thz_station_vals_stiff.insert(std::pair<Real, MAST::FieldFunction<Real> *> ((_n_dv_stations_x - j - 1) * _dx, h_z_f));
++
++                }
+             }
+ 
+             // now create the h_y function and give it to the property card
+             _thy_stiff_f[i] = new MAST::MultilinearInterpolation("hy", _thy_station_vals_stiff);
+             _thz_stiff_f[i] = new MAST::MultilinearInterpolation("hz", _thz_station_vals_stiff);
+ 
++            if (i < (_n_stiff/2)){
++                _thy_stiff_f[_n_stiff-1-i] = new MAST::MultilinearInterpolation("hy", _thy_station_vals_stiff);
++                _thz_stiff_f[_n_stiff-1-i] = new MAST::MultilinearInterpolation("hz", _thz_station_vals_stiff);
++            }
++
+             // this map is used to store the thickness parameter along length
+             _thy_station_vals_stiff.clear();
+             _thz_station_vals_stiff.clear();
+@@ -904,11 +927,14 @@ public:  // parametric constructor
+ 
+             _thyoff_stiff_f = new MAST::ConstantFieldFunction("hy_off", *_zero);
+ 
++            if (i < (_n_stiff/2)){
++                _hzoff_stiff_f[_n_stiff-1-i] = new MAST::SectionOffset("hz_off",*_thz_stiff_f[i],-0.5);
++            }
++
+             RealVectorX orientation = RealVectorX::Zero(3);
+             orientation(1) = 1.;
+             // property card per stiffener
+             _p_card_stiff[i] = new MAST::Solid1DSectionElementPropertyCard;
+-
+             // add the section properties to the card
+             _p_card_stiff[i]->add(*_thy_stiff_f[i]);
+             _p_card_stiff[i]->add(*_thz_stiff_f[i]);
+@@ -917,19 +943,34 @@ public:  // parametric constructor
+             _p_card_stiff[i]->y_vector() = orientation;
+             _p_card_stiff[i]->add(*_kappa_yy_f);
+             _p_card_stiff[i]->add(*_kappa_zz_f);
+-
+             // tell the section property about the material property
+             _p_card_stiff[i]->set_material(*_m_card);
+-
+             //_p_card_stiff[i]->set_bending_model(MAST::TIMOSHENKO);
+             //_p_card_stiff[i]->set_bending_model(MAST::BERNOULLI);
+-
+             if (_if_vk) _p_card_stiff[i]->set_strain(MAST::NONLINEAR_STRAIN);
+-
+             _p_card_stiff[i]->init();
+ 
+             // the domain ID of the stiffener is 1 plus the stiff number
+             _discipline->set_property_for_subdomain(i + 1, *_p_card_stiff[i]);
++
++            if (i < (_n_stiff/2)) {
++                _p_card_stiff[_n_stiff-1-i] = new MAST::Solid1DSectionElementPropertyCard;
++                // add the section properties to the card
++                _p_card_stiff[_n_stiff-1-i]->add(*_thy_stiff_f[i]);
++                _p_card_stiff[_n_stiff-1-i]->add(*_thz_stiff_f[i]);
++                _p_card_stiff[_n_stiff-1-i]->add(*_hzoff_stiff_f[i]);
++                _p_card_stiff[_n_stiff-1-i]->add(*_thyoff_stiff_f);
++                _p_card_stiff[_n_stiff-1-i]->y_vector() = orientation;
++                _p_card_stiff[_n_stiff-1-i]->add(*_kappa_yy_f);
++                _p_card_stiff[_n_stiff-1-i]->add(*_kappa_zz_f);
++                // tell the section property about the material property
++                _p_card_stiff[_n_stiff-1-i]->set_material(*_m_card);
++                if (_if_vk) _p_card_stiff[_n_stiff-1-i]->set_strain(MAST::NONLINEAR_STRAIN);
++                _p_card_stiff[_n_stiff-1-i]->init();
++                // the domain ID of the stiffener is 1 plus the stiff number
++                _discipline->set_property_for_subdomain(_n_stiff-i, *_p_card_stiff[i]);
++            }
++
+         }
+     }
+ 
+@@ -1302,7 +1343,7 @@ public:  // parametric constructor
+                 for (int j = 0; j < _freq[i].size(); j++) {
+                     summ += exp(-_rho_agg * ((_freq[i][j] / scaling_fac) - (*min_eig / scaling_fac)));
+                 }
+-                f_eig[i] = ((_min_freq / scaling_fac) - (*min_eig / scaling_fac) + (1 / _rho_agg) * log(summ))/1.e6;
++                f_eig[i] = ((_min_freq) - ((*min_eig) - (1 / _rho_agg) * log(summ)))/1.e6;
+ 
+                 // check if minimum value is satisfied
+                 if ((abs((*min_eig / scaling_fac) - ((*min_eig / scaling_fac) - (1 / _rho_agg) * log(summ)))/abs(*min_eig / scaling_fac)) > 1.e-2) {
+@@ -1463,7 +1504,7 @@ public:  // parametric constructor
+ 
+ 
+                             for (unsigned int j = 0; j < nconv; j++) {
+-                                nom[(i * nconv) + j]  += (1/scaling_fac)*(exp(-_rho_agg*((_freq[j][k]/scaling_fac)-(min_eigenvalue[j]/scaling_fac) ))) * eig_sens[j] / denom[j];
++                                nom[(i * nconv) + j]  += (exp(-_rho_agg*((_freq[j][k]/scaling_fac)-(min_eigenvalue[j]/scaling_fac) ))) * eig_sens[j] / denom[j];
+                         }
+                             _modal_assembly->clear_base_solution(true);
+                             _modal_assembly->clear_base_solution();

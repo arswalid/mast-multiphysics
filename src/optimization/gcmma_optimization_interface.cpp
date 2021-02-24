@@ -234,7 +234,7 @@ MAST::GCMMAOptimizationInterface::optimize() {
         if (ITER == 1) {
             // output the very first iteration
             _feval->_output_wrapper(0, XVAL, F0VAL, FVAL, true);
-        //
+            XOLD1 = XVAL;
         }
 
 
