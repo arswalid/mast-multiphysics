@@ -116,7 +116,7 @@ MAST::ContinuationSolverBase::solve()  {
     
     bool
     cont    = true;
-    
+    // this is the Nr solver used to find X and P on the curve
     while (cont) {
         
         libMesh::out
@@ -126,9 +126,9 @@ MAST::ContinuationSolverBase::solve()  {
         << std::setw(15) << norm
         << std::setw(20) << "relative res-l2: "
         << std::setw(15) << norm/norm0 << std::endl;
-        
+        // solve for X and p using predictor and corrector
         _solve_NR_iterate(X, *_p);
-        norm = _res_norm(X, *_p);
+        norm = _res_norm(X, *_p); // norm of the residual using the new computed x and p
         iter++;
         
         if (norm < abs_tol)       cont = false;
@@ -136,13 +136,17 @@ MAST::ContinuationSolverBase::solve()  {
         if (iter >= max_it) {
             if (arc_length > min_step)   {
                 
-                // reduce step-size if possible, otherwise terminate
-                libMesh::out
-                << "   Retrying with smaller step-size" << std::endl;
+
                 
                 // reanalyze with a smaller step-size
                 iter = 0;
                 arc_length =  std::max(min_step, .5*arc_length);
+
+                // reduce step-size if possible, otherwise terminate
+                libMesh::out
+                        << "   Retrying with smaller step-size"
+                        << std::setw(15) << arc_length << std::endl;
+
                 X.zero();
                 X.add(1., *_X0);
                 X.close();
@@ -150,8 +154,9 @@ MAST::ContinuationSolverBase::solve()  {
                 _reset_iterations();
                 cont = true;
             }
-            else
-                cont = false;
+            else{
+                libMesh::out << "residual didn't converge and arc-length readched lower bound" << std::endl;
+                libmesh_error();}
         }
     }
         
@@ -164,10 +169,8 @@ MAST::ContinuationSolverBase::solve()  {
     << std::setw(15) << norm/norm0
     << std::setw(20) << "Terminated"  << std::endl;
 
-    if ((norm/norm0) > 1.e-1) {
-        libMesh::out << "residual didn't converge at this step" << std::endl;
-    }
 
+    // adaptivity of arclength
     if (iter) {
         Real
         factor   = std::pow((1.*step_desired_iters)/(1.*iter+1.), step_size_change_exponent);
