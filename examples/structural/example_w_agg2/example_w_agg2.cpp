@@ -452,6 +452,10 @@ public:  // parametric constructor
         _n_ineq = 1 + 1 +
                   _n_elems;
 
+
+        _n_rel_change_iters =  _input("n_rel_change_iters","consecutive iters for convergence",3);
+        _tol = _input("_tol","tolerence for the optimizer",1.e-5);
+
         _max_iters = 1000;//?
 
         // stress limit
@@ -1842,7 +1846,8 @@ public:  // parametric constructor
                     solver.max_it              = _obj._input("max_it", "max nr iterations",          10);
                     solver.max_step            = _obj._input("max_step", "maximum arc-length step-size for continuation solver",   20.);
                     solver.step_desired_iters  = _obj._input("step_desired_iters", "maximum arc-length step-size for continuation solver",5);
-                    solver.rel_tol             = _obj._input("rel_tol", "relative tolerence in c-solver",1.e-7);
+                    solver.rel_tol             = _obj._input("rel_tol", "relative tolerence in c-solver",1.e-6);
+                    solver.abs_tol             = _obj._input("abs_tol", "abs tolerence in c-solver",1.e-6);
 
 
                     // specify temperature as the load parameter to be changed per
