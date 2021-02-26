@@ -208,6 +208,7 @@ protected:      // protected member variables
     std::vector<Real>
             _dv_scaling,
             _dv_low,
+            _dv_high,
             _dv_init;
 
     //   interpolates thickness between stations
@@ -422,6 +423,9 @@ public:  // parametric constructor
         _n_eq = 0;
         _n_ineq = _n_eig + 1 +
                   _n_elems;// constraint that each eigenvalue > 0 flutter constraint + one element stress functional per elem
+
+        _n_rel_change_iters =  _input("n_rel_change_iters","consecutive iters for convergence",3);
+        _tol = _input("_tol","tolerence for the optimizer",1.e-5);
 
         _max_iters = 1000;
 
@@ -774,6 +778,7 @@ public:  // parametric constructor
         _dv_init.resize(_n_vars);
         _dv_scaling.resize(_n_vars);
         _dv_low.resize(_n_vars);
+        _dv_high.resize(_n_vars);
 
         _problem_parameters.resize(_n_vars);
 
@@ -783,6 +788,7 @@ public:  // parametric constructor
             //_dv_init[i] = _input("dv_init", "", th / th_u, i);
             _dv_low[i] = th_l / th_u;
             _dv_scaling[i] = th_u;
+            _dv_high[i] = th_u / th_u;;
         }
 
         for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
@@ -1121,7 +1127,7 @@ public:  // parametric constructor
        xmax.resize(_n_vars);
 
        xmin    = _dv_low;
-       xmax    = _dv_scaling;
+       xmax    = _dv_high;
 
         //
         // now, check if the user asked to initialize dvs from a previous file
@@ -1417,7 +1423,7 @@ public:  // parametric constructor
             // set the eigenvalue constraints  -eig <= 0. scale
             // by an arbitrary 1/1.e7 factor
             for (unsigned int i = 0; i < nconv; i++)
-                fvals[i] = (_min_allowed_eig - eig_vals[i]) / 1.e7;
+                fvals[i] = (_min_allowed_eig - eig_vals[i]) / 1.e6;
         }
 
         //////////////////////////////////////////////////////////////////////
@@ -1538,7 +1544,7 @@ public:  // parametric constructor
                     _modal_assembly->clear_base_solution(true);
 
                     for (unsigned int j = 0; j < nconv; j++) {
-                        grads[(i * _n_ineq) + j] = -_dv_scaling[i] * eig_sens[j] / 1.e7;
+                        grads[(i * _n_ineq) + j] = -_dv_scaling[i] * eig_sens[j] / 1.e6;
                     }
                 }
             }
@@ -1893,8 +1899,8 @@ public:  // parametric constructor
                     solver.max_it              = _obj._input("max_it", "max nr iterations",          10);
                     solver.max_step            = _obj._input("max_step", "maximum arc-length step-size for continuation solver",   20.);
                     solver.step_desired_iters  = _obj._input("step_desired_iters", "maximum arc-length step-size for continuation solver",5);
-                    solver.rel_tol             = _obj._input("rel_tol", "relative tolerence in c-solver",1.e-7);
-
+                    solver.rel_tol             = _obj._input("rel_tol", "relative tolerence in c-solver",1.e-6);
+                    solver.abs_tol             = _obj._input("abs_tol", "abs tolerence in c-solver",1.e-6);
 
                     // specify temperature as the load parameter to be changed per
                     // load step
@@ -2113,7 +2119,7 @@ int main(int argc, char* argv[]) {
     
     
     unsigned int
-            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 15);
+            max_inner_iters        = _input("max_inner_iters", "maximum inner iterations in GCMMA", 10);
 
     Real
             constr_penalty         = _input("constraint_penalty", "constraint penalty in GCMMA", 50.),
