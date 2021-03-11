@@ -221,18 +221,15 @@ _create_panel(libMesh::MeshBase& panel,
          3*pow(x2,2), 2*x2, 1,  0,
          pow(x1,3),   pow(x1,2), x1, 1,
          pow(x2,3),   pow(x2,2), x2, 1;
-
     b << 0,0,0,1;
-
-    X = A.colPivHouseholderQr().solve(b);
+    X = A.lu().solve(b);
 
     A_ << 3*pow(x3,2), 2*x3, 1,  0,
           3*pow(x4,2), 2*x4, 1,  0,
           pow(x3,3),   pow(x3,2), x3, 1,
           pow(x4,3),   pow(x4,2), x4, 1;
     b_ << 0,0,1,0;
-
-    X_ = A_.colPivHouseholderQr().solve(b_);
+    X_ = A_.lu().solve(b_);
 
 
 
@@ -252,12 +249,18 @@ _create_panel(libMesh::MeshBase& panel,
             
             if ((y >= y0) && (y <= y1)){
                 if (x1 != x2) {
-                    if (n(0) >= x1 && n(0) < x3) {
+                    if (n(0) <= x1)
+                        func = 0;
+                    else if ((n(0) >= x1) && (n(0) < x3)) {
                         if (n(0) <= x2)
                             func = X[0] * pow(n(0), 3) + X[1] * pow(n(0), 2) + X[2] * n(0) + X[3];
-                        else
+                        else if  (n(0) > x2)
                             func = 1.;
-                    } else if (n(0) >= x3) {
+                        else {
+                            libMesh::out << "no such case in meshing" << std::endl;
+                            libmesh_error();}
+                    }
+                    else if (n(0) >= x3) {
                         if (n(0) <= x4)
                             func = X_[0] * pow(n(0), 3) + X_[1] * pow(n(0), 2) + X_[2] * n(0) + X_[3];
                         else
