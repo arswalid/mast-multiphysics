@@ -30,8 +30,17 @@
 #include "libmesh/serial_mesh.h"
 #include "libmesh/mesh_generation.h"
 #include "libmesh/boundary_info.h"
+#include <Eigen/QR>
 
-
+Real Quintic_Hermite_Interpolation(Real x,
+                                   Real x0,
+                                   Real x1,
+                                   Real y0,
+                                   Real y_0,
+                                   Real y__0,
+                                   Real y1,
+                                   Real y_1,
+                                   Real y__1);
 
 void
 MAST::HatStiffenedPanelMesh::init(const unsigned int n_stiff,
@@ -212,26 +221,7 @@ _create_panel(libMesh::MeshBase& panel,
          x2= per2*length,
          x3= (1 - per2)*length,
          x4= (1 - per1)*length,
-         func = 0;
-
-    //solve system of equation for equations of function
-    Matrix4f A,A_;
-    Vector4f b,b_,X,X_;
-    A << 3*pow(x1,2), 2*x1, 1,  0,
-         3*pow(x2,2), 2*x2, 1,  0,
-         pow(x1,3),   pow(x1,2), x1, 1,
-         pow(x2,3),   pow(x2,2), x2, 1;
-    b << 0,0,0,1;
-    X = A.lu().solve(b);
-
-    A_ << 3*pow(x3,2), 2*x3, 1,  0,
-          3*pow(x4,2), 2*x4, 1,  0,
-          pow(x3,3),   pow(x3,2), x3, 1,
-          pow(x4,3),   pow(x4,2), x4, 1;
-    b_ << 0,0,1,0;
-    X_ = A_.lu().solve(b_);
-
-
+         func = 0.;
 
     for ( ; n_it != n_end; n_it++) {
         
@@ -251,21 +241,22 @@ _create_panel(libMesh::MeshBase& panel,
                 if (x1 != x2) {
                     if (n(0) <= x1)
                         func = 0;
-                    else if ((n(0) >= x1) && (n(0) < x3)) {
-                        if (n(0) <= x2)
-                            func = X[0] * pow(n(0), 3) + X[1] * pow(n(0), 2) + X[2] * n(0) + X[3];
-                        else if  (n(0) > x2)
-                            func = 1.;
-                        else {
+                    else if ((n(0) > x1) && (n(0) < x2)) {
+                        func = Quintic_Hermite_Interpolation(n(0),x1,x2,0.,0.,0.,1.,0.,0.);
+                    }
+                    else if ((n(0) >= x2) && (n(0) <= x3)){
+                        func = 1.;
+                    }
+                    else if  ((n(0) > x3) && (n(0) < x4)){
+                        func = Quintic_Hermite_Interpolation(n(0),x3,x4,1.,0.,0.,0.,0.,0.);
+                    }
+                    else if (n(0) >= x4){
+                        func = 0;
+                    }
+                    else {
                             libMesh::out << "no such case in meshing" << std::endl;
                             libmesh_error();}
-                    }
-                    else if (n(0) >= x3) {
-                        if (n(0) <= x4)
-                            func = X_[0] * pow(n(0), 3) + X_[1] * pow(n(0), 2) + X_[2] * n(0) + X_[3];
-                        else
-                            func = 0;
-                    }
+
 
                     n(2) += func * (skin_dip_amplitude_by_panel_w * width * 0.5 *
                                     (1. - cos((y - y0) / (y1 - y0) * 2 * pi)));
@@ -273,7 +264,6 @@ _create_panel(libMesh::MeshBase& panel,
                 else
                     n(2) +=  (skin_dip_amplitude_by_panel_w * width * 0.5 *
                                     (1. - cos((y - y0) / (y1 - y0) * 2 * pi)));
-
             }
         }
     }
@@ -448,6 +438,28 @@ MAST::HatStiffenedPanelMesh::_combine_mesh(libMesh::MeshBase& panel,
     }
 }
 
+Real Quintic_Hermite_Interpolation(Real x,
+                                     Real x0,
+                                     Real x1,
+                                     Real y0,
+                                     Real y_0,
+                                     Real y__0,
+                                     Real y1,
+                                     Real y_1,
+                                     Real y__1){
+    Real func = 0;
 
+    func = y0 + y_0*(x-x0) +
+            0.5 * y__0*pow((x-x0),2) +
+            (y1 - y0 - y_0*(x1-x0) -
+            0.5*y__0*pow((x1-x0),2))*pow((x-x0),3)/pow((x1-x0),3) +
+            (3*y0 - 3*y1 + (2*y_0+y_1)*(x1-x0) +
+            0.5*y__0*pow((x1-x0),2))/pow((x1-x0),4)*pow((x-x0),3)*(x-x1) +
+            (6*y1 - 6*y0 - 3*(y_0 + y_1)*(x1-x0) +
+            0.5*(y__1 - y__0)*pow((x1-x0),2))/pow((x1-x0),5)*pow((x-x0),3)*pow((x-x1),2);
+
+    return func;
+
+}
 
 
