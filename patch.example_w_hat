@@ -1,0 +1,149 @@
+diff --git a/examples/structural/example_w_hat/example_w_hat.cpp b/examples/structural/example_w_hat/example_w_hat.cpp
+index e463930..e5098e1 100755
+--- a/examples/structural/example_w_hat/example_w_hat.cpp
++++ b/examples/structural/example_w_hat/example_w_hat.cpp
+@@ -419,7 +419,8 @@ public:  // parametric constructor
+         // number of eigenvalues
+         _n_eig = 20;
+         // now setup the optimization data
+-        _n_vars = _n_dv_stations_x + _n_dv_stations_x * _n_stiff; // for thickness variable
++        _n_vars = (_n_dv_stations_x/2+1) + (_n_dv_stations_x/2+1) * (_n_stiff/2+1); // for thickness variable
++
+         _n_eq = 0;
+         _n_ineq = _n_eig + 1 +
+                   _n_elems;// constraint that each eigenvalue > 0 flutter constraint + one element stress functional per elem
+@@ -791,12 +792,12 @@ public:  // parametric constructor
+             _dv_high[i] = th_u / th_u;;
+         }
+ 
+-        for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
++        for (unsigned int i = 0; i < (_n_dv_stations_x/2+1); i++) {
+             _dv_init[i] = _input("dv_init", "", th / th_u, i);
+         }
+ 
+ 
+-        for (unsigned int i = _n_dv_stations_x; i < _n_vars; i++) {
++        for (unsigned int i = (_n_dv_stations_x/2+1); i < _n_vars; i++) {
+             _dv_init[i] = _input("dv_init", "", th_stiff / th_u, i);
+         }
+     }
+@@ -805,8 +806,8 @@ public:  // parametric constructor
+ 
+         _thy_station_vals.clear();
+         // create the thickness variables
+-        _th_station_parameters_plate.resize(_n_dv_stations_x);
+-        _th_station_functions_plate.resize(_n_dv_stations_x);
++        _th_station_parameters_plate.resize((_n_dv_stations_x/2+1));
++        _th_station_functions_plate.resize((_n_dv_stations_x/2+1));
+ 
+         Real
+                kappa_val = _input("kappa", "shear correction factor",  5./6.);
+@@ -819,7 +820,7 @@ public:  // parametric constructor
+                _parameters[kappa->name()]    = kappa;
+                _field_functions.insert(kappa_f);
+         
+-        for (unsigned int i = 0; i < _n_dv_stations_x; i++) {
++        for (unsigned int i = 0; i < (_n_dv_stations_x/2+1); i++) {
+             std::ostringstream oss;
+             oss << "h_" << i;
+ 
+@@ -842,6 +843,11 @@ public:  // parametric constructor
+ 
+             //_discipline->add_parameter(*h); no longer needed
+             _problem_parameters[i] = h;
++
++            if (i < (_n_dv_stations_x/2)) {
++                _thy_station_vals.insert(std::pair<Real, MAST::FieldFunction<Real> *>
++                                                 ((_n_dv_stations_x - i - 1) * _dx, h_f));
++            }
+         }
+ 
+         // now create the h_y function and give it to the property card
+@@ -864,7 +870,6 @@ public:  // parametric constructor
+         _p_card_plate->set_material(*_m_card);
+ 
+         if (_if_vk) _p_card_plate->set_strain(MAST::NONLINEAR_STRAIN);
+-
+         _discipline->set_property_for_subdomain(0, *_p_card_plate);
+ 
+     }
+@@ -923,8 +928,8 @@ public:  // parametric constructor
+         // thickness per stiffener station
+         // hat stiffeners
+         // create the thickness variables
+-        _th_station_parameters_stiff.resize(_n_dv_stations_x * _n_stiff);
+-        _th_station_functions_stiff.resize(_n_dv_stations_x  * _n_stiff);
++        _th_station_parameters_stiff.resize((_n_dv_stations_x/2+1) * (_n_stiff/2+1));
++        _th_station_functions_stiff.resize((_n_dv_stations_x/2+1) * (_n_stiff/2+1));
+ 
+         _th_stiff_f.resize(_n_stiff);
+         _hoff_stiff_f.resize(_n_stiff);
+@@ -940,14 +945,10 @@ public:  // parametric constructor
+         _parameters[kappa->name()]    = kappa;
+         _field_functions.insert(kappa_f);
+         
+-        for (unsigned int i = 0; i < _n_stiff; i++) {
+-
+-            // this map is used to store the thickness parameter along length
+-            _thy_station_vals.clear();
+-
++        for (unsigned int i = 0; i < (_n_stiff/2+1); i++) {
+             // first define the thickness station parameters and the thickness
+             // field function
+-            for (unsigned int j = 0; j < _n_dv_stations_x; j++) {
++            for (unsigned int j = 0; j < (_n_dv_stations_x/2+1); j++) {
+                 std::ostringstream oss_stf;
+                 oss_stf << "h_" << j << "_stiff_" << i;
+ 
+@@ -966,36 +967,43 @@ public:  // parametric constructor
+                                                  (j * _dx, h_stf_f));
+ 
+                 // add the function to the parameter set
+-                _th_station_parameters_stiff[i * _n_dv_stations_x + j] = h_stf;
+-                _th_station_functions_stiff[ i * _n_dv_stations_x + j] = h_stf_f;
++                _th_station_parameters_stiff[i * (_n_dv_stations_x/2+1) + j] = h_stf;
++                _th_station_functions_stiff[ i * (_n_dv_stations_x/2+1) + j] = h_stf_f;
+ 
+ 
+                 // tell the assembly system about the sensitvity parameter
+-                _problem_parameters[(i + 1) * _n_dv_stations_x + j] = h_stf;
++                _problem_parameters[(i + 1) * (_n_dv_stations_x/2+1) + j] = h_stf;
++
++                if (j < (_n_dv_stations_x/2)) {
++                    _thy_station_vals.insert(std::pair<Real, MAST::FieldFunction<Real> *>
++                                                     ((_n_dv_stations_x - j - 1) * _dx, h_stf_f));
++                }
+             }
+ 
+ //            // now create the h_y function and give it to the property card
+ 
+-
+             _th_stiff_f[i]   = new MAST::MultilinearInterpolation("h", _thy_station_vals);
++            _thy_station_vals.clear();
++
+             _hoff_stiff_f[i] = new MAST::SectionOffset("off",
+                                                         *_zero_f,
+                                                         0.);
+ 
+             _p_card_stiff[i] = new MAST::Solid2DSectionElementPropertyCard;
+-
+             // add the section properties to the card
+             _p_card_stiff[i]->add(*_th_stiff_f[i]);
+             _p_card_stiff[i]->add(*_hoff_stiff_f[i]);
+             _p_card_stiff[i]->add(*kappa_f);
+-            
+             // tell the section property about the material property
+             _p_card_stiff[i]->set_material(*_m_card);
+-
+             if (_if_vk) _p_card_stiff[i]->set_strain(MAST::NONLINEAR_STRAIN);
+-
+             // the domain ID of the stiffener is 1 plus the stiff number
+             _discipline->set_property_for_subdomain(i + 1, *_p_card_stiff[i]);
++
++            if (i < (_n_stiff/2)) {
++                // the domain ID of the stiffener is 1 plus the stiff number
++                _discipline->set_property_for_subdomain(_n_stiff-i, *_p_card_stiff[i]);
++            }
+         }
+ 
+     }
