@@ -17,6 +17,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include <iomanip>
+
 // MAST includes
 #include "examples/structural/base/hat_stiffened_panel_mesh.h"
 #include "examples/base/multilinear_interpolation.h"
@@ -31,6 +33,7 @@
 #include "libmesh/mesh_generation.h"
 #include "libmesh/boundary_info.h"
 #include <Eigen/QR>
+#include <fstream>
 
 Real Quintic_Hermite_Interpolation(Real x,
                                    Real x0,
@@ -220,8 +223,26 @@ _create_panel(libMesh::MeshBase& panel,
     Real x1= per1*length,
          x2= per2*length,
          x3= (1 - per2)*length,
-         x4= (1 - per1)*length,
-         func = 0.;
+         x4= (1 - per1)*length;
+
+         std::vector<Real> func(panel.n_nodes(),0.);
+
+    std::ofstream out_geometry;
+    out_geometry.open("mesh_coordinates.txt", std::ofstream::out);
+    out_geometry << std::setw(10) << "x"
+                 << std::setw(10) << "y"
+                 << std::setw(10) << "z";
+
+    out_geometry << std::endl;
+
+    std::ofstream out_func;
+    out_func.open("func_coordinates.txt", std::ofstream::out);
+    out_func << std::setw(10) << "x"
+                 << std::setw(10) << "y"
+                 << std::setw(10) << "func";
+
+    out_func << std::endl;
+    int k=0;
 
     for ( ; n_it != n_end; n_it++) {
         
@@ -230,44 +251,72 @@ _create_panel(libMesh::MeshBase& panel,
         p(0) = n(1);
         y_loc(p, 0., y);
         n(1) = y;
-        
+
+
         // move the z-location if the node belongs to a stiffener
         for (unsigned int i=0; i<n_stiff; i++) {
-            
+
             y0 = (*y_vals[2*i+1])();// + (w_stiff-w_hat)/2.;
             y1 = (*y_vals[2*i+2])();// - (w_stiff-w_hat)/2.;
-            
+
             if ((y >= y0) && (y <= y1)){
                 if (x1 != x2) {
                     if (n(0) <= x1)
-                        func = 0;
+                        func[k] = 0;
                     else if ((n(0) > x1) && (n(0) < x2)) {
-                        func = Quintic_Hermite_Interpolation(n(0),x1,x2,0.,0.,0.,1.,0.,0.);
+                        func[k] = Quintic_Hermite_Interpolation(n(0),x1,x2,0.,0.,0.,1.,0.,0.);
                     }
                     else if ((n(0) >= x2) && (n(0) <= x3)){
-                        func = 1.;
+                        func[k] = 1.;
                     }
                     else if  ((n(0) > x3) && (n(0) < x4)){
-                        func = Quintic_Hermite_Interpolation(n(0),x3,x4,1.,0.,0.,0.,0.,0.);
+                        func[k] = Quintic_Hermite_Interpolation(n(0),x3,x4,1.,0.,0.,0.,0.,0.);
                     }
                     else if (n(0) >= x4){
-                        func = 0;
+                        func[k] = 0;
                     }
                     else {
                             libMesh::out << "no such case in meshing" << std::endl;
                             libmesh_error();}
 
 
-                    n(2) += func * (skin_dip_amplitude_by_panel_w * width * 0.5 *
+
+                    n(2) +=  (skin_dip_amplitude_by_panel_w * width * 0.5 *
                                     (1. - cos((y - y0) / (y1 - y0) * 2 * pi)));
+
+
                 }
                 else
                     n(2) +=  (skin_dip_amplitude_by_panel_w * width * 0.5 *
                                     (1. - cos((y - y0) / (y1 - y0) * 2 * pi)));
             }
         }
+        out_func << std::setw(15) << n(0)
+                 << std::setw(15) << n(1)
+                 << std::setw(15) << func[k];
+
+        out_func << std::endl;
+
+        k=k+1;
+
     }
-    
+    k=0;
+    n_it  = panel.nodes_begin();
+    for ( ; n_it != n_end; n_it++) {
+
+        libMesh::Node &n = **n_it;
+
+        p(0) = n(1);
+        y_loc(p, 0., y);
+        n(2) = n(2)*func[k];
+        k=k+1;
+
+        out_geometry << std::setw(15) << n(0)
+                     << std::setw(15) << n(1)
+                     << std::setw(15) << n(2);
+
+        out_geometry << std::endl;
+    }
     // now delete the constant function pointers
     for (unsigned int i=0; i<2+2*n_stiff; i++) {
         
