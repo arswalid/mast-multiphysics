@@ -1515,7 +1515,8 @@ public:  // parametric constructor
         // evaluate the eigenvalue constraint
         //////////////////////////////////////////////////////////////////////
         Real _rho_agg = _input("rho_agg", "rho for aggregation", 100.),
-                scaling_fac = _input("scaling_fac", "scaling fac for eigs", 1.e0);
+                scaling_fac = _input("scaling_fac", "scaling fac for eigs", 1.e0),
+                freq_scale = _input("freq_scale", "scaling fac for freq const", 1.e6);
 
         std::vector<Real> f_eig(_n_eig,0.);
         if (nconv) {
@@ -1527,7 +1528,7 @@ public:  // parametric constructor
                 for (int j = 0; j < _freq[i].size(); j++) {
                     summ += exp(-_rho_agg * ((_freq[i][j] / scaling_fac) - (*min_eig / scaling_fac)));
                 }
-                f_eig[i] = ((_min_freq) - ((*min_eig) - (1 / _rho_agg) * log(summ)))/1.e6;
+                f_eig[i] = ((_min_freq) - ((*min_eig) - (1 / _rho_agg) * log(summ)))/freq_scale;
 
                 // check if minimum value is satisfied
                 if ((abs((*min_eig / scaling_fac) - ((*min_eig / scaling_fac) - (1 / _rho_agg) * log(summ)))/abs(*min_eig / scaling_fac)) > 1.e-2) {
@@ -1699,7 +1700,7 @@ public:  // parametric constructor
                 std::vector<Real> grads_eig(_n_vars*nconv,0.);
                 for (unsigned int i = 0; i < _n_vars; i++) {
                     for (unsigned int j = 0; j < nconv; j++) {
-                        grads_eig[(i * nconv) + j] = -_dv_scaling[i] *  nom[(i * nconv) + j]/1.e6 ;
+                        grads_eig[(i * nconv) + j] = -_dv_scaling[i] *  nom[(i * nconv) + j]/freq_scale ;
                     }
                 }
 

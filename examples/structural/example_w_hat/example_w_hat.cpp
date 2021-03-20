@@ -284,6 +284,7 @@ protected:      // protected member variables
     MAST::StructuralModalEigenproblemAssemblyElemOperations*  _modal_elem_ops;
     Real                                      _p_val, _vm_rho;
     bool _if_continuation_solver;
+    bool forced_symm;
     MAST::StressStrainOutputBase*               _stress_elem;
     // output quantity objects to evaluate stress
     std::vector<MAST::StressStrainOutputBase *> _outputs;
@@ -376,7 +377,8 @@ public:  // parametric constructor
             _if_continuation_solver(false),
             _stress_elem(nullptr),
             _if_neg_eig(false),
-            _if_analysis(false)
+            _if_analysis(false),
+            forced_symm(false)
     {
 
 
@@ -396,7 +398,7 @@ public:  // parametric constructor
 
         _if_vk = _input("nonlinear", "linear or nonlinear", false);
         _if_analysis = _input("if_analysis", "analysis only", false);
-
+        forced_symm = _input("forced_symm", "sorced symmetry for dvars", false);
 
         _if_continuation_solver = _input("if_continuation_solver", "continuation solver on/off flag", false);
 
@@ -419,7 +421,12 @@ public:  // parametric constructor
         // number of eigenvalues
         _n_eig = 20;
         // now setup the optimization data
-        _n_vars = _n_dv_stations_x + _n_dv_stations_x * _n_stiff; // for thickness variable
+        if (forced_symm == true)
+            _n_vars = (_n_dv_stations_x/2+1) + (_n_dv_stations_x/2+1) * (_n_stiff/2+1); // for thickness variable
+        else if (forced_symm == false)
+            _n_vars = (_n_dv_stations_x) + (_n_dv_stations_x) * (_n_stiff);
+
+
         _n_eq = 0;
         _n_ineq = _n_eig + 1 +
                   _n_elems;// constraint that each eigenvalue > 0 flutter constraint + one element stress functional per elem
@@ -448,14 +455,25 @@ public:  // parametric constructor
 
         _init_eq_sys();
 
-        _init_dv_vector();
+        if (forced_symm == false){
+            _init_dv_vector();
+        }
+        else if (forced_symm == true){
+            _init_dv_vector_forced_symm();
+        }
 
         _init_loads();
         _init_piston_vals();
         _init_material(); // create the property functions for the plate
 
-        _init_thickness_variables();
-        _init_section_property_stiffener_hat();
+        if (forced_symm == false){
+            _init_thickness_variables();
+            _init_section_property_stiffener_hat();
+        }
+        else if (forced_symm == true){
+            _init_thickness_variables_forced_symm();
+            _init_section_property_stiffener_hat_forced_symm();
+        }
 
         _init_nullspace(); // initialize the null space object and assign it to the structural module
 
@@ -599,24 +617,6 @@ public:  // parametric constructor
         }
     }
 
-
-
-
-
-//    void _init_fetype() {
-//
-//        // FEType to initialize the system. Get the order and type of element.
-//        std::string
-//                order_str   = _input("fe_order", "order of finite element shape basis functions",    "first"),
-//                family_str  = _input("fe_family",      "family of finite element shape functions", "lagrange");
-//
-//        libMesh::Order
-//                o  = libMesh::Utility::string_to_enum<libMesh::Order>(order_str);
-//        libMesh::FEFamily
-//                fe = libMesh::Utility::string_to_enum<libMesh::FEFamily>(family_str);
-//        _fetype = libMesh::FEType(o, fe);
-//    }
-
     void _init_mesh() {
 
         // create the mesh
@@ -688,8 +688,6 @@ public:  // parametric constructor
 
         _discipline = new MAST::PhysicsDisciplineBase(*_eq_sys);
 
-
-
     }
 
     void _init_dirichlet_conditions() {
@@ -697,21 +695,6 @@ public:  // parametric constructor
         // create and add the boundary condition and loads
         // 0 1 2 3 stands for the edges of the plate
         // _structural_sys->vars() gives the vars indexes (u,v,w,thx.thy.thz)
-
-
-
-//        std::vector<unsigned int> constrained_vars(4);
-//        // not constraning ty, tz will keep it simply supported
-//        constrained_vars[0] = 0;  // u
-//        constrained_vars[1] = 1;  // v
-//        constrained_vars[2] = 2;  // w
-//        constrained_vars[3] = 5;  // tz
-
-        //_dirichlet_bottom->init (0, constrained_vars);
-        //_dirichlet_right->init  (1, constrained_vars);
-        //_dirichlet_top->init    (2, constrained_vars);
-        //_dirichlet_left->init   (3, constrained_vars);
-
 
         // create and add the boundary condition
         _dirichlet_bottom = new MAST::DirichletBoundaryCondition;
@@ -799,6 +782,115 @@ public:  // parametric constructor
         for (unsigned int i = _n_dv_stations_x; i < _n_vars; i++) {
             _dv_init[i] = _input("dv_init", "", th_stiff / th_u, i);
         }
+    }
+
+    void _init_dv_vector_forced_symm() {
+        // initialize the dv vector data (dv = design variables)
+        const Real
+                th_l     = _input("thickness_lower", "", 0.001),
+                th_u     = _input("thickness_upper", "", 0.2),
+                th       = _input("thickness", "", 0.2),
+                th_stiff = _input("thickness_stiff","",0.2);
+
+        //distance btw stations
+        _dx = _length / (_n_dv_stations_x - 1);
+
+        _dv_init.resize(_n_vars);
+        _dv_scaling.resize(_n_vars);
+        _dv_low.resize(_n_vars);
+        _dv_high.resize(_n_vars);
+
+        _problem_parameters.resize(_n_vars);
+
+        // design variables for the thickness values
+        for (unsigned int i = 0; i < _n_vars; i++) {
+
+            //_dv_init[i] = _input("dv_init", "", th / th_u, i);
+            _dv_low[i] = th_l / th_u;
+            _dv_scaling[i] = th_u;
+            _dv_high[i] = th_u / th_u;;
+        }
+
+        for (unsigned int i = 0; i < (_n_dv_stations_x/2+1); i++) {
+            _dv_init[i] = _input("dv_init", "", th / th_u, i);
+        }
+
+
+        for (unsigned int i = (_n_dv_stations_x/2+1); i < _n_vars; i++) {
+            _dv_init[i] = _input("dv_init", "", th_stiff / th_u, i);
+        }
+    }
+
+    void _init_thickness_variables_forced_symm(){
+
+        _thy_station_vals.clear();
+        // create the thickness variables
+        _th_station_parameters_plate.resize((_n_dv_stations_x/2+1));
+        _th_station_functions_plate.resize((_n_dv_stations_x/2+1));
+
+        Real
+                kappa_val = _input("kappa", "shear correction factor",  5./6.);
+
+        MAST::Parameter
+                *kappa    = new MAST::Parameter("kappa", kappa_val);
+        MAST::ConstantFieldFunction
+                *kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
+
+        _parameters[kappa->name()]    = kappa;
+        _field_functions.insert(kappa_f);
+
+        for (unsigned int i = 0; i < (_n_dv_stations_x/2+1); i++) {
+            std::ostringstream oss;
+            oss << "h_" << i;
+
+            // now we need a parameter that defines the thickness at the
+            // specified station and a constant function that defines the
+            // field function at that location.
+            MAST::Parameter *h =
+                    new MAST::Parameter(oss.str(), _input("thickness", "", 0.002));
+
+            MAST::ConstantFieldFunction *h_f =
+                    new MAST::ConstantFieldFunction(oss.str(), *h);
+
+            // add this to the thickness map
+            _thy_station_vals.insert(std::pair<Real, MAST::FieldFunction<Real> *>
+                                             (i * _dx, h_f));
+
+            // add the function to the parameter set
+            _th_station_parameters_plate[i] = h;
+            _th_station_functions_plate[i] = h_f;
+
+            //_discipline->add_parameter(*h); no longer needed
+            _problem_parameters[i] = h;
+
+            if (i < (_n_dv_stations_x/2)) {
+                _thy_station_vals.insert(std::pair<Real, MAST::FieldFunction<Real> *>
+                                                 ((_n_dv_stations_x - i - 1) * _dx, h_f));
+            }
+        }
+
+        // now create the h_y function and give it to the property card
+        _th_plate_f = new MAST::MultilinearInterpolation("h", _thy_station_vals) ;
+        _thy_station_vals.clear();
+
+        _hoff_plate_f   = new MAST::SectionOffset("off",
+                                                  *_th_plate_f,
+                                                  0.);
+
+        // create the element property card
+        _p_card_plate = new MAST::Solid2DSectionElementPropertyCard;
+
+        // add the section properties to the card
+        _p_card_plate->add(*_th_plate_f);
+        _p_card_plate->add(*_hoff_plate_f);
+        _p_card_plate->add(*kappa_f);
+
+        // tell the section property about the material property
+        _p_card_plate->set_material(*_m_card);
+
+        if (_if_vk) _p_card_plate->set_strain(MAST::NONLINEAR_STRAIN);
+        _discipline->set_property_for_subdomain(0, *_p_card_plate);
+
     }
 
     void _init_thickness_variables(){
@@ -1000,6 +1092,94 @@ public:  // parametric constructor
 
     }
 
+    void _init_section_property_stiffener_hat_forced_symm() {
+
+        // property card per stiffener
+        _p_card_stiff.resize(_n_stiff);
+
+        // thickness per stiffener station
+        // hat stiffeners
+        // create the thickness variables
+        _th_station_parameters_stiff.resize((_n_dv_stations_x/2+1) * (_n_stiff/2+1));
+        _th_station_functions_stiff.resize((_n_dv_stations_x/2+1) * (_n_stiff/2+1));
+
+        _th_stiff_f.resize(_n_stiff);
+        _hoff_stiff_f.resize(_n_stiff);
+
+        Real
+                kappa_val = _input("kappa", "shear correction factor",  5./6.);
+
+        MAST::Parameter
+                *kappa    = new MAST::Parameter("kappa", kappa_val);
+        MAST::ConstantFieldFunction
+                *kappa_f  = new MAST::ConstantFieldFunction("kappa",  *kappa);
+
+        _parameters[kappa->name()]    = kappa;
+        _field_functions.insert(kappa_f);
+
+        for (unsigned int i = 0; i < (_n_stiff/2+1); i++) {
+            // first define the thickness station parameters and the thickness
+            // field function
+            for (unsigned int j = 0; j < (_n_dv_stations_x/2+1); j++) {
+                std::ostringstream oss_stf;
+                oss_stf << "h_" << j << "_stiff_" << i;
+
+
+                // now we need a parameter that defines the thickness at the
+                // specified station and a constant function that defines the
+                // field function at that location.
+                MAST::Parameter
+                        *h_stf = new MAST::Parameter(oss_stf.str(), _input("thickness_stiff", "", 0.002));
+
+                MAST::ConstantFieldFunction
+                        *h_stf_f = new MAST::ConstantFieldFunction(oss_stf.str(), *h_stf);
+
+                // add this to the thickness map
+                _thy_station_vals.insert(std::pair<Real, MAST::FieldFunction<Real> *>
+                                                 (j * _dx, h_stf_f));
+
+                // add the function to the parameter set
+                _th_station_parameters_stiff[i * (_n_dv_stations_x/2+1) + j] = h_stf;
+                _th_station_functions_stiff[ i * (_n_dv_stations_x/2+1) + j] = h_stf_f;
+
+
+                // tell the assembly system about the sensitvity parameter
+                _problem_parameters[(i + 1) * (_n_dv_stations_x/2+1) + j] = h_stf;
+
+                if (j < (_n_dv_stations_x/2)) {
+                    _thy_station_vals.insert(std::pair<Real, MAST::FieldFunction<Real> *>
+                                                     ((_n_dv_stations_x - j - 1) * _dx, h_stf_f));
+                }
+            }
+
+//            // now create the h_y function and give it to the property card
+
+            _th_stiff_f[i]   = new MAST::MultilinearInterpolation("h", _thy_station_vals);
+            _thy_station_vals.clear();
+
+            _hoff_stiff_f[i] = new MAST::SectionOffset("off",
+                                                       *_zero_f,
+                                                       0.);
+
+            _p_card_stiff[i] = new MAST::Solid2DSectionElementPropertyCard;
+            // add the section properties to the card
+            _p_card_stiff[i]->add(*_th_stiff_f[i]);
+            _p_card_stiff[i]->add(*_hoff_stiff_f[i]);
+            _p_card_stiff[i]->add(*kappa_f);
+            // tell the section property about the material property
+            _p_card_stiff[i]->set_material(*_m_card);
+            if (_if_vk) _p_card_stiff[i]->set_strain(MAST::NONLINEAR_STRAIN);
+            // the domain ID of the stiffener is 1 plus the stiff number
+            _discipline->set_property_for_subdomain(i + 1, *_p_card_stiff[i]);
+
+            if (i < (_n_stiff/2)) {
+                // the domain ID of the stiffener is 1 plus the stiff number
+                _discipline->set_property_for_subdomain(_n_stiff-i, *_p_card_stiff[i]);
+            }
+        }
+
+    }
+    
     void _init_piston_vals() {
         // create the property functions and add them to the
 
