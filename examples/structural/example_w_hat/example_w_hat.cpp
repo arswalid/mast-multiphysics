@@ -646,7 +646,7 @@ public:  // parametric constructor
                             _input("hat_dip_h_by_w","",-0.00),    // hat_dip_amplitude_by_panel_w,
                             .2,       // stiff_w_by_panel_w
                             .5,       // hat_w_by_stiff_w
-                            .05,      // hat_h_by_panel_w
+                        _input("hat_h_by_panel_w","",-.05),      // hat_h_by_panel_w
                             *_mesh,
                             e_type,
                         _input("per1","",.0),
@@ -1179,7 +1179,7 @@ public:  // parametric constructor
         }
 
     }
-    
+
     void _init_piston_vals() {
         // create the property functions and add them to the
 
