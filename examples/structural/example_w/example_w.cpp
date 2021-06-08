@@ -205,6 +205,7 @@ protected:      // protected member variables
     bool _if_vk;
     bool forced_symm;
     MAST::Parameter* _zero;
+    MAST::Parameter* _T_ref;
     std::map<Real, MAST::FieldFunction<Real> *> _thy_station_vals;
     std::map<Real, MAST::FieldFunction<Real> *> _thy_station_vals_stiff,_thz_station_vals_stiff;
     MAST::StructuralNearNullVectorSpace*       _nsp;
@@ -313,6 +314,7 @@ public:  // parametric constructor
             
             _if_vk(false),
             _zero(nullptr),
+            _T_ref(nullptr),
             _thyoff_stiff_f(nullptr),
             _nsp(nullptr),
 
@@ -406,7 +408,7 @@ public:  // parametric constructor
         _max_iters = 1000;//?
 
         // stress limit
-        _stress_limit = _input("max_stress", " ", 4.00e8);
+        _stress_limit = _input("max_stress", " ", 1.02e9); // yield stress at 300 celcius
 
         // variables for aggregation of vm stress
         _p_val   = _input("constraint_aggregation_p_val", "value of p in p-norm stress aggregation", 2.0);
@@ -864,10 +866,10 @@ public:  // parametric constructor
     void _init_material() {
         // create the property functions and add them to the card
         Real
-                Eval      = _input("E", "", 72.e9),
-                nu_val    = _input("nu", "", 0.33),
-                alpha_val = _input("alpha", "", 2.5e-5),
-                rho_val   = _input("rho", "", 2700.0);
+                Eval      = _input("E", "", 199.94e9),
+                nu_val    = _input("nu", "", 0.294),
+                alpha_val = _input("alpha", "", 1.28e-5),
+                rho_val   = _input("rho", "", 8220.0);
 
         _E = new MAST::Parameter("E", Eval);
         _nu = new MAST::Parameter("nu", nu_val);
@@ -1162,11 +1164,13 @@ public:  // parametric constructor
         _p_cav_f = new MAST::ConstantFieldFunction("pressure", *_p_cav);
 
         _zero = new MAST::Parameter("zero", 0.);
+        _T_ref = new MAST::Parameter("t0", _input("t0", "", 294.2611));
 
-        _ref_temp_f = new MAST::ConstantFieldFunction("ref_temperature", *_zero);
-        _temp       = new MAST::Parameter("temperature", _input("temp", "", 10.));
+        _ref_temp_f = new MAST::ConstantFieldFunction("ref_temperature", *_T_ref);
+        _temp       = new MAST::Parameter("temperature", _input("temp", "", 304.2611));
         _temp_f     = new MAST::ConstantFieldFunction("temperature", *_temp);
 
+        _parameters[  _T_ref->name()] = _T_ref;
         _parameters[  _p_cav->name()] = _p_cav;
         _parameters[  _zero->name()]     = _zero;
         _parameters[  _temp->name()]  = _temp;
